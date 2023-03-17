@@ -75,8 +75,8 @@ int main() {
 	double mutRateBeta = 	0.01;
 	double mutRateStrategySender =   0.01;
 	double mutRateStrategyReceiver = 0.01;
-	double mutStepAlpha = 	0.4;	//SD of a normal distribution of mutation size with mean 0
-	double mutStepBeta = 	0.4;
+	double mutStepAlpha = 	0.1;	//SD of a normal distribution of mutation size with mean 0
+	double mutStepBeta = 	0.1;
 
 	int initStrategySender = 1;
 	int initStrategyReceiver = 1;
@@ -88,7 +88,7 @@ int main() {
 	int coutReport = 0;
 	int reportFreq = 1000; //Export data every this many generations
 
-	string dataFileName = "testRuns3";
+	string dataFileName = "lowMu";
 	string dataFileFolder = "C:/Users/owner/Documents/S4/Simulation";
 
 	// seed parameter
