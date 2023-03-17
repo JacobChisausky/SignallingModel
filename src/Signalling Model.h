@@ -8,16 +8,7 @@
 #ifndef SIGNALLING_MODEL_H_
 #define SIGNALLING_MODEL_H_
 
-
-class Agent {
-public:
-
-	int Strategy;
-	int AlphaBeta;
-
-	Agent(int Str, double AB);
-};
-
+//Not using header file currently
 
 
 #endif /* SIGNALLING_MODEL_H_ */

@@ -5,7 +5,7 @@ library(gtable)
 dir <- "C:/Users/owner/Documents/S4/Simulation"
 
 list.files(dir,"data.*.csv")
-fileSelect <- 7
+fileSelect <- 2
 
 
 data <- read.csv(paste0(dir,"/",list.files(dir,"data.*.csv")[fileSelect]))

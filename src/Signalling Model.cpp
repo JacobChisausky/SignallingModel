@@ -60,8 +60,8 @@ int main() {
 	double N = 1000;	//There will be N receivers and N senders. Stored as double for calculations
 	int G = 100000;
 
-	double c1 = 0.2;	//Signal cost to T1
-	double c2 = 0.8;	//Signal cost to T2
+	double c1 = 0.5;	//Signal cost to T1
+	double c2 = 0.5;	//Signal cost to T2
 	double v1 = 1;		//Benefit to T1
 	double v2 = 1;		//Benefit to T2
 	double w1 = 1;		//Receiver Payoff: A1 to T1
@@ -78,17 +78,19 @@ int main() {
 	double mutStepAlpha = 	0.1;	//SD of a normal distribution of mutation size with mean 0
 	double mutStepBeta = 	0.1;
 
+	string initializationType = "random"; //"random" or "parameter". For latter option, see below
+
 	int initStrategySender = 1;
 	int initStrategyReceiver = 1;
-	int initAlpha = 0;
-	int initBeta = 1;
+	int initAlpha = 1;
+	int initBeta = 0;
 
 	int replicates = 1;
 
 	int coutReport = 0;
 	int reportFreq = 1000; //Export data every this many generations
 
-	string dataFileName = "lowMu";
+	string dataFileName = "Rand";
 	string dataFileFolder = "C:/Users/owner/Documents/S4/Simulation";
 
 	// seed parameter
@@ -100,9 +102,13 @@ int main() {
 
 	std::ofstream dataLog;
 	std::ofstream params;
-	string strTime = to_string(calendar_time.tm_hour) + "_" + to_string(calendar_time.tm_min) + "_" + to_string(calendar_time.tm_sec);
-	string str1 = dataFileFolder + "/" + "data_" +  dataFileName + "_" + strTime + ".csv";
-	string str2 = dataFileFolder + "/" + "params_" + dataFileName + "_" + strTime + ".csv";
+
+	tm *ltm = localtime(&now);
+	int yday = ltm->tm_yday;
+
+	string strTime = to_string(yday) + "_" +  to_string(calendar_time.tm_hour) + "_" + to_string(calendar_time.tm_min) + "_" + to_string(calendar_time.tm_sec);
+	string str1 = dataFileFolder + "/" + strTime + "_data_" +  dataFileName + ".csv";
+	string str2 = dataFileFolder + "/" + strTime + "params_" + dataFileName + ".csv";
 	dataLog.open(str1);
 	params.open(str2);
 
@@ -148,12 +154,24 @@ int main() {
 		std::vector<double> ReceiverFitnesses(N);
 
 		//Initialize Population
-		for (int i = 0; i < N; i++){
-			SenderVector.push_back(Sender(initStrategySender,initAlpha));
-			ReceiverVector.push_back(Receiver(initStrategyReceiver,initBeta));
+		if (initializationType == "parameter"){
+			for (int i = 0; i < N; i++){
+				SenderVector.push_back(Sender(initStrategySender,initAlpha));
+				ReceiverVector.push_back(Receiver(initStrategyReceiver,initBeta));
 
-			OffspringSenderVector.push_back(Sender(1,0));
-			OffspringReceiverVector.push_back(Receiver(1,1));
+				OffspringSenderVector.push_back(Sender(1,0));
+				OffspringReceiverVector.push_back(Receiver(1,1));
+			}
+		} else if (initializationType == "random"){
+			for (int i = 0; i < N; i++){
+				SenderVector.push_back(Sender(bol(rng),prob(rng)));
+				ReceiverVector.push_back(Receiver(bol(rng),prob(rng)));
+
+				OffspringSenderVector.push_back(Sender(1,0));
+				OffspringReceiverVector.push_back(Receiver(1,1));
+			}
+		} else {
+			return -1;
 		}
 
 		int numT1 = round(m*N);	//**This rounding could produce minor deviations from analytic results
@@ -440,9 +458,11 @@ int main() {
 				}
 			}
 
+			if (g%500 == 0){
+				cout << "\n" << g;
+			}
 
 			if (g%reportFreq == 0){
-				cout << "\n" << g;
 				if (coutReport == 1){
 					for (int i = 0; i < 20; i++){
 						cout << SenderVector[i].Strategy << " " << SenderVector[i].Alpha << " " << SenderVector[i].fitness << " | ";
