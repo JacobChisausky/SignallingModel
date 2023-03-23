@@ -5,7 +5,7 @@ library(gtable)
 dir <- "C:/Users/owner/Documents/S4/Simulation"
 
 list.files(dir,"data.*.csv")
-fileSelect <- 8
+fileSelect <- 4
 
 
 data <- read.csv(paste0(dir,"/",list.files(dir,"data.*.csv")[fileSelect]))
@@ -28,7 +28,7 @@ for (r in 1:params$replicates){
     
     sendAlphaBeta <- as.numeric(mean(dataSubRG_send$alphaBeta))
     receAlphaBeta <- as.numeric(mean(dataSubRG_rece$alphaBeta))
-    
+     
     sendFit <- as.numeric(mean(dataSubRG_send$fitness))
     receFit <- as.numeric(mean(dataSubRG_rece$fitness))
     
@@ -46,7 +46,6 @@ for (r in 1:params$replicates){
     summaryStats <- rbind(summaryStats,c(r,g,"Receiver",
                                          receStrat3,"strat3",receAlphaBeta,receFit))
     
-      
   }
 }
 colnames(summaryStats) <- c("rep","gen","indType","stratNum","stratType","meanAlphaBeta","meanFit")
@@ -64,7 +63,8 @@ for (i in 1:nrow(summaryStats)){
 }
 
 
-lab <- paste0("c1: ",params$c1,
+lab <- paste0("N: ",N,
+              "\nc1: ",params$c1,
               "\nc2: ",params$c2,
               "\nv1: ",params$v1,
               "\nv2: ",params$v2,
@@ -91,7 +91,7 @@ p<-ggplot(data=subset(summaryStats,rep==1),aes(x=as.numeric(gen))) +
   geom_path(aes(y=as.numeric(meanAlphaBeta)*N,color=paste0(indType)),alpha=0.1) +
   theme_bw() + 
   facet_grid(indType~.) + 
-  labs(color="Data",x="Generation") +
+  labs(color="Data",x="Generation") + 
   scale_y_continuous(
     name = "Count",
     sec.axis = sec_axis(~.*1/N, name="Alpha or Beta")) +
@@ -100,7 +100,7 @@ p<-ggplot(data=subset(summaryStats,rep==1),aes(x=as.numeric(gen))) +
 label = lab
 g = ggplotGrob(p)
 g$layout$clip[g$layout$name == "panel"] = "off"
-grid.draw(g)
+#grid.draw(g)
 textgrob = textGrob(label, gp = gpar(cex = .75), )
 width = unit(1, "grobwidth",textgrob) + unit(10, "points")
 height = unit(1, "grobheight", textgrob)+ unit(10, "points")
@@ -126,4 +126,21 @@ grid.newpage()
 }
 grid.draw(g)
 
+#Addexp for fitness if honest equilib?
+pFit<-ggplot(data=subset(summaryStats,rep==1),aes(x=as.numeric(gen))) +
+  geom_point(aes(y=as.numeric(meanFit)*N),alpha=0.1,shape=10) +
+  geom_path(aes(y=as.numeric(meanFit)*N),alpha=0.1) +
+  geom_line(aes(y=exp*N)) +
+  geom_point(aes(y=as.numeric(stratNum),color=paste0(stratType))) +
+  geom_path(aes(y=as.numeric(stratNum),color=paste0(stratType)),alpha=0.1) +
+  geom_point(aes(y=as.numeric(meanAlphaBeta)*N,color=paste0(indType)),shape=4) +
+  geom_path(aes(y=as.numeric(meanAlphaBeta)*N,color=paste0(indType)),alpha=0.1) +
+  theme_bw() + 
+  facet_grid(indType~.) + 
+  labs(color="Data",x="Generation") + 
+  scale_y_continuous(
+    name = "Count",
+    sec.axis = sec_axis(~.*1/N, name="Alpha or Beta")) +
+  scale_color_hue(labels = c("Beta", "Alpha","Strategy 1","Strategy 2","Strategy 3"))
+pFit 
 

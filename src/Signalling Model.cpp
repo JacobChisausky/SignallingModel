@@ -56,12 +56,16 @@ public:
 
 int main() {
 
+	//Notes
+	//When c1 and c2 are close, alpha is much lower than expectation (N = 1000)
+
+
 	//Take parameters
 	double N = 1000;	//There will be N receivers and N senders. Stored as double for calculations
-	int G = 100000;
+	int G = 5000;
 
-	double c1 = 0.5;	//Signal cost to T1
-	double c2 = 0.7;	//Signal cost to T2
+	double c1 = 0.95;	//Signal cost to T1
+	double c2 = 1;	//Signal cost to T2
 	double v1 = 1;		//Benefit to T1
 	double v2 = 1;		//Benefit to T2
 	double w1 = 1;		//Receiver Payoff: A1 to T1
@@ -69,7 +73,7 @@ int main() {
 	double w3 = 0;		//Receiver Payoff: A1 to T2
 	double w4 = 1;		//Receiver Payoff: A2 to T2
 	double m = .25;	//Probability of being T1
-	int interactionPartners = 10;
+	int interactionPartners = 1;
 
 	double mutRateAlpha = 	0.01;	//Chance of a mutation occurring each generation
 	double mutRateBeta = 	0.01;
@@ -82,6 +86,8 @@ int main() {
 
 	string initializationType = "random"; //"random" or "parameter". For latter option, see below
 
+	bool cauchyDist = true; //If true, use caucy dist for mutations. If false, use normal dist
+
 	int initStrategySender = 1;
 	int initStrategyReceiver = 1;
 	int initAlpha = 1;
@@ -90,9 +96,9 @@ int main() {
 	int replicates = 1;
 
 	int coutReport = 0;
-	int reportFreq = 1000; //Export data every this many generations
+	int reportFreq = 100; //Export data every this many generations
 
-	string dataFileName = "alwaysMut";
+	string dataFileName = "same";
 	string dataFileFolder = "C:/Users/owner/Documents/S4/Simulation";
 
 	// seed parameter
@@ -108,7 +114,22 @@ int main() {
 	tm *ltm = localtime(&now);
 	int yday = ltm->tm_yday;
 
-	string strTime = to_string(yday) + "_" +  to_string(calendar_time.tm_hour) + "_" + to_string(calendar_time.tm_min) + "_" + to_string(calendar_time.tm_sec);
+	string hr = to_string(calendar_time.tm_hour);
+	if (hr.length() == 1){
+		hr = "0" + hr;
+	}
+
+	string min = to_string(calendar_time.tm_min);
+	if (min.length() == 1){
+		min = "0" + min;
+	}
+
+	string sec = to_string(calendar_time.tm_sec);
+	if (sec.length() == 1){
+		sec = "0" + sec;
+	}
+
+	string strTime = to_string(yday) + "_" +  hr + "_" + min + "_" + sec;
 	string str1 = dataFileFolder + "/" + strTime + "_data_" +  dataFileName + ".csv";
 	string str2 = dataFileFolder + "/" + strTime + "_params_" + dataFileName + ".csv";
 	dataLog.open(str1);
@@ -119,8 +140,13 @@ int main() {
 	params << "N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates";
 	params << "\n" << to_string(N) <<","<< to_string(G) <<","<< to_string(c1) <<","<< to_string(c2) <<","<< to_string(v1)<<","<<to_string(v2)<<","<<to_string(w1)<<","<<to_string(w2)<<","<<to_string(w3)<<","<<to_string(w4)<<","<<to_string(m)<<","<<to_string(interactionPartners)<<","<<to_string(mutRateAlpha)<<","<<to_string(mutRateBeta)<<","<<to_string(mutRateStrategySender)<<","<<to_string(mutRateStrategyReceiver)<<","<<to_string(mutStepAlpha)<<","<<to_string(mutStepBeta)<<","<<to_string(initStrategySender)<<","<<to_string(initStrategyReceiver)<<","<<to_string(initAlpha)<<","<<to_string(initBeta)<<","<<to_string(replicates),"\n";
 
-	auto MutationDistAlpha = std::normal_distribution<double>(0.0, mutStepAlpha);
-	auto MutationDistBeta = std::normal_distribution<double>(0.0, mutStepBeta);
+	auto MutationDistAlpha = std::normal_distribution<double>(0.0, std::abs(mutStepAlpha));
+	auto MutationDistBeta = std::normal_distribution<double>(0.0, std::abs(mutStepBeta));
+
+	if (cauchyDist == 1) {
+		auto MutationDistAlpha = std::cauchy_distribution<double>(0.0, std::abs(mutStepAlpha));
+		auto MutationDistBeta = std::cauchy_distribution<double>(0.0, std::abs(mutStepBeta));
+	}
 
 	//Random number generators
 	auto rd = std::random_device {}; 	//This should be changed to a parameterized seed variable
@@ -128,11 +154,9 @@ int main() {
 	std::uniform_real_distribution<double> prob(0,1);
 	std::uniform_int_distribution bol(1,3);
 
-
 	//Fitness distribution
 	auto SenderFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
 	auto ReceiverFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
-
 
 	//Vector used for drawing random numbers
 	std::vector<int> nullVec;
@@ -144,8 +168,7 @@ int main() {
 	double maxReceiverFit = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
 	double minReceiverFit = double(interactionPartners)*double(std::min(w1,std::min(w2,std::min(w3,w4))));
 	double maxSenderFit = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
-	double minSenderFit = double(interactionPartners)*-0.7;
-	//(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
+	double minSenderFit = double(interactionPartners)*(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
 
 	cout << maxReceiverFit << endl << minReceiverFit << endl << maxSenderFit << endl << minSenderFit << endl;
 
@@ -412,7 +435,7 @@ int main() {
 				//With normalization
 				//Round to nearest 4 decimal places - because double numbers are imprecise, there are errors when comparing using <. E.g., 0.7 < 0.7 will evaluate as true sometimes for doubles.
 				//This causes errors because sender fitnesses after normalization can be slightly negative. Rounding fixes the issue.
-					//Though there is likely a faster way to resolve this.
+				//Though there is likely a faster way to resolve this.
 				if (SenderVector[i].fitness < minSenderFit){
 					SenderFitnesses[i] = round(  (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit) * 10000 ) / 10000;
 				} else {
