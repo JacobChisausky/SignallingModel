@@ -61,7 +61,7 @@ int main() {
 	int G = 100000;
 
 	double c1 = 0.5;	//Signal cost to T1
-	double c2 = 0.5;	//Signal cost to T2
+	double c2 = 0.7;	//Signal cost to T2
 	double v1 = 1;		//Benefit to T1
 	double v2 = 1;		//Benefit to T2
 	double w1 = 1;		//Receiver Payoff: A1 to T1
@@ -75,8 +75,10 @@ int main() {
 	double mutRateBeta = 	0.01;
 	double mutRateStrategySender =   0.01;
 	double mutRateStrategyReceiver = 0.01;
-	double mutStepAlpha = 	0.1;	//SD of a normal distribution of mutation size with mean 0
-	double mutStepBeta = 	0.1;
+	double mutStepAlpha = 	0.4;	//SD of a normal distribution of mutation size with mean 0
+	double mutStepBeta = 	0.4;
+
+	string alphaBetaMutation = "always"; //"always" or "strict" or "random". Always = alpha and beta can mutate with any strategy. Strict = alpha and beta can only mutate with strategy 1. Random = a new alpha or beta are drawn when an individual mutates to strategy 1
 
 	string initializationType = "random"; //"random" or "parameter". For latter option, see below
 
@@ -90,7 +92,7 @@ int main() {
 	int coutReport = 0;
 	int reportFreq = 1000; //Export data every this many generations
 
-	string dataFileName = "Rand";
+	string dataFileName = "alwaysMut";
 	string dataFileFolder = "C:/Users/owner/Documents/S4/Simulation";
 
 	// seed parameter
@@ -108,7 +110,7 @@ int main() {
 
 	string strTime = to_string(yday) + "_" +  to_string(calendar_time.tm_hour) + "_" + to_string(calendar_time.tm_min) + "_" + to_string(calendar_time.tm_sec);
 	string str1 = dataFileFolder + "/" + strTime + "_data_" +  dataFileName + ".csv";
-	string str2 = dataFileFolder + "/" + strTime + "params_" + dataFileName + ".csv";
+	string str2 = dataFileFolder + "/" + strTime + "_params_" + dataFileName + ".csv";
 	dataLog.open(str1);
 	params.open(str2);
 
@@ -136,6 +138,22 @@ int main() {
 	std::vector<int> nullVec;
 	for (int i = 0; i < N; i++){
 		nullVec.push_back(i);
+	}
+
+	//Determine max and min possible fitnesses for normalization
+	double maxReceiverFit = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
+	double minReceiverFit = double(interactionPartners)*double(std::min(w1,std::min(w2,std::min(w3,w4))));
+	double maxSenderFit = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
+	double minSenderFit = double(interactionPartners)*-0.7;
+	//(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
+
+	cout << maxReceiverFit << endl << minReceiverFit << endl << maxSenderFit << endl << minSenderFit << endl;
+
+	if (minReceiverFit == maxReceiverFit){	//To avoid divide by 0
+		maxReceiverFit += 0.00001;
+	}
+	if (minSenderFit == maxSenderFit){
+		maxSenderFit += 0.00001;
 	}
 
 	//Start replicate loop
@@ -361,7 +379,8 @@ int main() {
 			//Reproduction
 			//Using a discrete distribution of fitnesses
 
-			//Determine max and min fitnesses for normalization
+			//Determine max and min fitnesses for normalization - now this is done earlier.
+			/*
 			double minSenderFit = SenderVector[1].fitness;
 			double maxSenderFit = SenderVector[1].fitness;
 			double minReceiverFit = ReceiverVector[1].fitness;
@@ -379,32 +398,34 @@ int main() {
 					minReceiverFit = ReceiverVector[i].fitness;
 				}
 			}
-
-			if (minReceiverFit == maxReceiverFit){	//To avoid dividy by 0
-				maxReceiverFit += 0.0001;
-			}
-			if (minSenderFit == maxSenderFit){
-				maxSenderFit += 0.0001;
-			}
+			 */
 
 			for (int i = 0; i < N; i++){
-				//cout << SenderVector[i].fitness << " ";
+				if (SenderVector[i].fitness < minSenderFit){
+					//	cout << SenderVector[i].fitness << " " << minSenderFit <<" minYYY";
+					//return 2;
+				}
+			}
+			//cout << endl;
+
+			for (int i = 0; i < N; i++){
 				//With normalization
-				SenderFitnesses[i] = (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit);
-				ReceiverFitnesses[i] = (ReceiverVector[i].fitness - minReceiverFit)/(maxReceiverFit-minReceiverFit)+.1;
+				//Round to nearest 4 decimal places - because double numbers are imprecise, there are errors when comparing using <. E.g., 0.7 < 0.7 will evaluate as true sometimes for doubles.
+				//This causes errors because sender fitnesses after normalization can be slightly negative. Rounding fixes the issue.
+					//Though there is likely a faster way to resolve this.
+				if (SenderVector[i].fitness < minSenderFit){
+					SenderFitnesses[i] = round(  (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit) * 10000 ) / 10000;
+				} else {
+					SenderFitnesses[i] = (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit);
+				}
+				ReceiverFitnesses[i] = (ReceiverVector[i].fitness - minReceiverFit)/(maxReceiverFit-minReceiverFit);
 
 			}
 
-
-			//**Issue to resolve - this discrete distribution does not allow negative values.
-			//To resolve this, I could truncate all negative vales to 0 (no chance of reproduction).
-			//Instead, I will normalize from 0 to 1 so that negative fitness individuals can still reproduce.
-			//I should see what Graeme thinks
 			SenderFitnessDist.mutate(SenderFitnesses.cbegin(), SenderFitnesses.cend());
 			ReceiverFitnessDist.mutate(ReceiverFitnesses.cbegin(), ReceiverFitnesses.cend());
 
 			//Determining parents of offspring. Store offspring in Offspring vector
-			//cout<<"\n";
 			for (int i = 0; i < N; i++){
 				//cout << SenderFitnessDist(rng) << " ";
 				OffspringSenderVector[i] = SenderVector[SenderFitnessDist(rng)];
@@ -423,6 +444,9 @@ int main() {
 						mut = bol(rng);
 					}
 					OffspringSenderVector[i].Strategy = mut;
+					if (mut == 1 && alphaBetaMutation == "random"){
+						OffspringSenderVector[i].Alpha = prob(rng);
+					}
 				}
 
 				if (prob(rng) < mutRateStrategyReceiver){
@@ -431,9 +455,12 @@ int main() {
 						mut = bol(rng);
 					}
 					OffspringReceiverVector[i].Strategy = mut;
+					if (mut == 1 && alphaBetaMutation == "random"){
+						OffspringReceiverVector[i].Beta = prob(rng);
+					}
 				}
 
-				if (OffspringSenderVector[i].Strategy == 1){
+				if (OffspringSenderVector[i].Strategy == 1 || alphaBetaMutation == "always"){
 					if (prob(rng) < mutRateAlpha){
 						OffspringSenderVector[i].Alpha += MutationDistAlpha(rng);
 						if (OffspringSenderVector[i].Alpha < 0){	//These corrections will make 0 and 1 'sticky', because half of the mutations
@@ -445,7 +472,7 @@ int main() {
 					}
 				}
 
-				if (OffspringReceiverVector[i].Strategy == 1){
+				if (OffspringReceiverVector[i].Strategy == 1 || alphaBetaMutation == "always"){
 					if (prob(rng) < mutRateBeta){
 						OffspringReceiverVector[i].Beta += MutationDistBeta(rng);
 						if (OffspringReceiverVector[i].Beta < 0){
@@ -459,7 +486,7 @@ int main() {
 			}
 
 			if (g%500 == 0){
-				cout << "\n" << g;
+				cout <<" " << g;
 			}
 
 			if (g%reportFreq == 0){
@@ -489,12 +516,10 @@ int main() {
 
 		}//End Generation Loop
 
-
 	}//End replicate loop
 
 	dataLog.close();
 	params.close();
-
 
 	std::cout << "\nDone";
 	return 0;

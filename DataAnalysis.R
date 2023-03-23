@@ -5,7 +5,7 @@ library(gtable)
 dir <- "C:/Users/owner/Documents/S4/Simulation"
 
 list.files(dir,"data.*.csv")
-fileSelect <- 2
+fileSelect <- 8
 
 
 data <- read.csv(paste0(dir,"/",list.files(dir,"data.*.csv")[fileSelect]))
@@ -80,22 +80,22 @@ lab <- paste0("c1: ",params$c1,
               "\nmuStepB: ",params$mutStepBeta
               )
 
-
+mean(subset(data,indType=="Sender" & gen > 20000)$alphaBeta)
+subset(summaryStats, as.numeric(gen) > 20000 & indType=="Sender")
 
 p<-ggplot(data=subset(summaryStats,rep==1),aes(x=as.numeric(gen))) +
   geom_line(aes(y=exp*N)) +
   geom_point(aes(y=as.numeric(stratNum),color=paste0(stratType))) +
   geom_path(aes(y=as.numeric(stratNum),color=paste0(stratType)),alpha=0.1) +
-  geom_point(aes(y=as.numeric(as.numeric(meanAlphaBeta)*as.numeric(params$N)),color=paste0(indType)),shape=4) +
-  geom_path(aes(y=as.numeric(as.numeric(meanAlphaBeta)*as.numeric(params$N)),color=paste0(indType)),alpha=0.1) +
+  geom_point(aes(y=as.numeric(meanAlphaBeta)*N,color=paste0(indType)),shape=4) +
+  geom_path(aes(y=as.numeric(meanAlphaBeta)*N,color=paste0(indType)),alpha=0.1) +
   theme_bw() + 
   facet_grid(indType~.) + 
   labs(color="Data",x="Generation") +
   scale_y_continuous(
     name = "Count",
     sec.axis = sec_axis(~.*1/N, name="Alpha or Beta")) +
-  scale_color_hue(labels = c("Alpha", "Beta","Strategy 1","Strategy 2","Strategy 3"))
-
+  scale_color_hue(labels = c("Beta", "Alpha","Strategy 1","Strategy 2","Strategy 3"))
 {
 label = lab
 g = ggplotGrob(p)
