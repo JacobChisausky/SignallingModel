@@ -1,6 +1,6 @@
 {
-	"seed": 1234567890,
-	"N": 1000,
+	"seed": 5025257,
+	"N": 200,
 	"G": 10000,
 	"c1": 0.5,
 	"c2": 0.9,
@@ -13,25 +13,21 @@
 	"m": 0.4,
 	"interactionPartners": 1,
 	"mutRateAlpha": 0.01,
-	"
-                 mutRateBeta": 0.01,
+	"mutRateBeta": 0.01,
 	"mutRateStrategySender": 0.01,
 	"mutRateStrategyReceiver": 0.01,
 	"mutStepAlpha": 0.4,
-	"
-                 mutStepBeta": 0.4,
+	"mutStepBeta": 0.4,
 	"alphaBetaMutation": "random",
 	"initializationType": "random",
 	"cauchyDist": true,
-	"
-                 initStrategySender": 1,
+	"initStrategySender": 1,
 	"initStrategyReceiver": 1,
 	"initAlpha": 1,
 	"initBeta": 0,
 	"replicates": 2,
-	"
-                 coutReport": 0,
+	"coutReport": 0,
 	"reportFreq": 500,
-	"dataFileName": "C:/Users/owner/eclipse-workspace/Signalling Model/Debug/"rScriptTest"_1",
-	"dataFileFolder": "C:/Users/owner/Documents/S4/Simulation"
+	"dataFileName": "rScriptTest_1",
+	"dataFileFolder": "C:/Users/owner/Documents/S4/Simulation/88_17_24_33_rScriptTest2"
 }
