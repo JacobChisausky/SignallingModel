@@ -1,0 +1,1 @@
+doubles must be preceeded by a 0 if < 1: eg 0.25 not .25

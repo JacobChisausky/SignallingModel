@@ -12,9 +12,11 @@
 #include <random>
 #include <ctime>
 #include <fstream>		// for writing output to files
-#include "rndutils.hpp"
 
+#include "rndutils.hpp"
+#include "parameters.h"
 //#include "Signalling Model.h"
+
 using namespace std;
 
 class Sender {
@@ -54,18 +56,20 @@ public:
 };
 
 
-int main() {
+int main(int argc, char* argv[]) {
 
 	//Notes
 	//When c1 and c2 are close, alpha is much lower than expectation (N = 1000)
 
 
-	//Take parameters
-	double N = 1000;	//There will be N receivers and N senders. Stored as double for calculations
-	int G = 5000;
+	//Take parameters - old way
+	/*
+	int seed = 123456789;
+	double N = 10000;	//There will be N receivers and N senders. Stored as double for calculations
+	int G = 2000;
 
 	double c1 = 0.95;	//Signal cost to T1
-	double c2 = 1;	//Signal cost to T2
+	double c2 = 1.05;	//Signal cost to T2
 	double v1 = 1;		//Benefit to T1
 	double v2 = 1;		//Benefit to T2
 	double w1 = 1;		//Receiver Payoff: A1 to T1
@@ -96,14 +100,64 @@ int main() {
 	int replicates = 1;
 
 	int coutReport = 0;
-	int reportFreq = 100; //Export data every this many generations
+	int reportFreq = 50; //Export data every this many generations
 
 	string dataFileName = "same";
 	string dataFileFolder = "C:/Users/owner/Documents/S4/Simulation";
+	 */
 
-	// seed parameter
+	//Take parameters from parameter file using json - new way
 
-	//End user input parameters
+	std::cout << argv[1] << std::endl;
+
+	nlohmann::json json_in;
+	std::ifstream is(argv[1]);   //assumes that the file name is given as a parameter in the command line
+	is >> json_in;
+	parameters sim_pars = json_in.get<parameters>();
+
+	int seed = sim_pars.seed;
+	double N = sim_pars.N;	//There will be N receivers and N senders. Stored as double for calculations
+	int G = sim_pars.G;
+
+	double c1 = sim_pars.c1;	//Signal cost to T1
+	double c2 = sim_pars.c2;	//Signal cost to T2
+	double v1 = sim_pars.v1;		//Benefit to T1
+	double v2 = sim_pars.v2;		//Benefit to T2
+	double w1 = sim_pars.w1;		//Receiver Payoff: A1 to T1
+	double w2 = sim_pars.w2;		//Receiver Payoff: A2 to T1
+	double w3 = sim_pars.w3;		//Receiver Payoff: A1 to T2
+	double w4 = sim_pars.w4;		//Receiver Payoff: A2 to T2
+	double m = sim_pars.m;	//Probability of being T1
+	int interactionPartners = sim_pars.interactionPartners;
+
+	double mutRateAlpha = 	sim_pars.mutRateAlpha;	//Chance of a mutation occurring each generation
+	double mutRateBeta = 	sim_pars.mutRateBeta;
+	double mutRateStrategySender =   sim_pars.mutRateStrategySender;
+	double mutRateStrategyReceiver = sim_pars.mutRateStrategyReceiver;
+	double mutStepAlpha = 	sim_pars.mutStepAlpha;	//SD of a normal distribution of mutation size with mean 0
+	double mutStepBeta = 	sim_pars.mutStepBeta;
+
+	std::string alphaBetaMutation = sim_pars.alphaBetaMutation; //"always" or "strict" or "random". Always = alpha and beta can mutate with any strategy. Strict = alpha and beta can only mutate with strategy 1. Random = a new alpha or beta are drawn when an individual mutates to strategy 1
+
+	std::string initializationType = sim_pars.initializationType; //"random" or "parameter". For latter option, see below
+
+	bool cauchyDist = sim_pars.cauchyDist; //If true, use caucy dist for mutations. If false, use normal dist
+
+	int initStrategySender = sim_pars.initStrategySender;
+	int initStrategyReceiver = sim_pars.initStrategyReceiver;
+	int initAlpha = sim_pars.initAlpha;
+	int initBeta = sim_pars.initBeta;
+
+	int replicates = sim_pars.replicates;
+
+	int coutReport = sim_pars.coutReport;	//0 = don't report
+	int reportFreq = sim_pars.reportFreq; //Export data every this many generations
+
+	std::string dataFileName = sim_pars.dataFileName;
+	std::string dataFileFolder = sim_pars.dataFileFolder;
+
+	//_________End parameter input
+
 
 	const std::time_t now = std::time(nullptr) ; // get the current time point
 	const std::tm calendar_time = *std::localtime( std::addressof(now) ) ;
@@ -137,8 +191,8 @@ int main() {
 
 
 	dataLog << "rep,gen,ind,indType,sendType,strategy,alphaBeta,fitness";
-	params << "N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates";
-	params << "\n" << to_string(N) <<","<< to_string(G) <<","<< to_string(c1) <<","<< to_string(c2) <<","<< to_string(v1)<<","<<to_string(v2)<<","<<to_string(w1)<<","<<to_string(w2)<<","<<to_string(w3)<<","<<to_string(w4)<<","<<to_string(m)<<","<<to_string(interactionPartners)<<","<<to_string(mutRateAlpha)<<","<<to_string(mutRateBeta)<<","<<to_string(mutRateStrategySender)<<","<<to_string(mutRateStrategyReceiver)<<","<<to_string(mutStepAlpha)<<","<<to_string(mutStepBeta)<<","<<to_string(initStrategySender)<<","<<to_string(initStrategyReceiver)<<","<<to_string(initAlpha)<<","<<to_string(initBeta)<<","<<to_string(replicates),"\n";
+	params << "seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates";
+	params << "\n" << to_string(seed) << "," << to_string(N) <<","<< to_string(G) <<","<< to_string(c1) <<","<< to_string(c2) <<","<< to_string(v1)<<","<<to_string(v2)<<","<<to_string(w1)<<","<<to_string(w2)<<","<<to_string(w3)<<","<<to_string(w4)<<","<<to_string(m)<<","<<to_string(interactionPartners)<<","<<to_string(mutRateAlpha)<<","<<to_string(mutRateBeta)<<","<<to_string(mutRateStrategySender)<<","<<to_string(mutRateStrategyReceiver)<<","<<to_string(mutStepAlpha)<<","<<to_string(mutStepBeta)<<","<<to_string(initStrategySender)<<","<<to_string(initStrategyReceiver)<<","<<to_string(initAlpha)<<","<<to_string(initBeta)<<","<<to_string(replicates),"\n";
 
 	auto MutationDistAlpha = std::normal_distribution<double>(0.0, std::abs(mutStepAlpha));
 	auto MutationDistBeta = std::normal_distribution<double>(0.0, std::abs(mutStepBeta));
@@ -149,8 +203,9 @@ int main() {
 	}
 
 	//Random number generators
-	auto rd = std::random_device {}; 	//This should be changed to a parameterized seed variable
-	auto rng = std::default_random_engine { rd() };
+	//auto rd = std::random_device {}; 	//This should be changed to a parameterized seed variable
+	//auto rng = std::default_random_engine { rd() };
+	auto rng = std::default_random_engine {seed};
 	std::uniform_real_distribution<double> prob(0,1);
 	std::uniform_int_distribution bol(1,3);
 
@@ -508,9 +563,9 @@ int main() {
 				}
 			}
 
-			if (g%500 == 0){
-				cout <<" " << g;
-			}
+		//	if (g%500 == 0){
+		//		cout <<" " << g;
+		//	}
 
 			if (g%reportFreq == 0){
 				if (coutReport == 1){

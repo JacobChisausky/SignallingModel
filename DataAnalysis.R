@@ -3,13 +3,15 @@ library(grid)
 library(gtable)
 
 dir <- "C:/Users/owner/Documents/S4/Simulation"
+list.files(dir)
+folderSelect <- list.files(dir)[1]
 
-list.files(dir,"data.*.csv")
-fileSelect <- 4
+list.files(paste0(dir,"/",folderSelect),"data.*.csv")
+fileSelect<-1
+#fileSelect <- length(list.files(paste0(dir,"/",folderSelect),"data.*.csv"))
 
-
-data <- read.csv(paste0(dir,"/",list.files(dir,"data.*.csv")[fileSelect]))
-params <- read.csv(paste0(dir,"/",list.files(dir,"params.*.csv")[fileSelect]))
+data <- read.csv(paste0(dir,"/",folderSelect,"/",list.files(paste0(dir,"/",folderSelect),"data.*.csv")[fileSelect]))
+params <- read.csv(paste0(dir,"/",folderSelect,"/",list.files(paste0(dir,"/",folderSelect),"params.*.csv")[fileSelect]))
 N <- as.numeric(params$N)
 
 #This snippet produces summary stats from raw data #####
@@ -52,16 +54,12 @@ colnames(summaryStats) <- c("rep","gen","indType","stratNum","stratType","meanAl
 #### end ####
 
 
-head(summaryStats)
-
-
-expBeta <- as.numeric(params$c2)
-expAlpha <- as.numeric(params$m/(1-params$m))
+expBeta <- max(min(as.numeric(params$c2),1),0)
+expAlpha <- max(min(as.numeric(params$m/(1-params$m)),1),0)
 summaryStats$exp <- 0
 for (i in 1:nrow(summaryStats)){
   summaryStats[i,]$exp<-ifelse(summaryStats[i,]$indType=="Sender",expAlpha,expBeta)
 }
-
 
 lab <- paste0("N: ",N,
               "\nc1: ",params$c1,
@@ -72,6 +70,7 @@ lab <- paste0("N: ",N,
               "\nw2: ",params$w2,
               "\nw3: ",params$w3,
               "\nw4: ",params$w4,
+              "\nint_Parts: ",params$interactionPartners,
               "\nmuRateA: ",params$mutRateAlpha,
               "\nmuRateB: ",params$mutRateBeta,
               "\nmuRateSS: ",params$mutRateStrategySender,
@@ -79,9 +78,6 @@ lab <- paste0("N: ",N,
               "\nmuStepA: ",params$mutStepAlpha,
               "\nmuStepB: ",params$mutStepBeta
               )
-
-mean(subset(data,indType=="Sender" & gen > 20000)$alphaBeta)
-subset(summaryStats, as.numeric(gen) > 20000 & indType=="Sender")
 
 p<-ggplot(data=subset(summaryStats,rep==1),aes(x=as.numeric(gen))) +
   geom_line(aes(y=exp*N)) +
@@ -96,6 +92,7 @@ p<-ggplot(data=subset(summaryStats,rep==1),aes(x=as.numeric(gen))) +
     name = "Count",
     sec.axis = sec_axis(~.*1/N, name="Alpha or Beta")) +
   scale_color_hue(labels = c("Beta", "Alpha","Strategy 1","Strategy 2","Strategy 3"))
+p
 {
 label = lab
 g = ggplotGrob(p)
@@ -125,6 +122,8 @@ g$widths[g$layout[grepl("guide-box", g$layout$name), "l"]] = max(width, sum(leg$
 grid.newpage()
 }
 grid.draw(g)
+
+
 
 #Addexp for fitness if honest equilib?
 pFit<-ggplot(data=subset(summaryStats,rep==1),aes(x=as.numeric(gen))) +
