@@ -10,7 +10,7 @@
 	"w2": 0,
 	"w3": 0,
 	"w4": 1,
-	"m": .25,
+	"m": 0.25,
 	"interactionPartners": 1,
 	"mutRateAlpha": 0.01,
 	"mutRateBeta": 0.01,

@@ -138,8 +138,16 @@ int main(int argc, char* argv[]) {
 	double mutStepBeta = 	sim_pars.mutStepBeta;
 
 	std::string alphaBetaMutation = sim_pars.alphaBetaMutation; //"always" or "strict" or "random". Always = alpha and beta can mutate with any strategy. Strict = alpha and beta can only mutate with strategy 1. Random = a new alpha or beta are drawn when an individual mutates to strategy 1
+	if (alphaBetaMutation != "always" && alphaBetaMutation != "strict" && alphaBetaMutation != "random") {
+		std::cout << "Invalid entry for alphaBetaMutation";
+		return 91;
+	}
 
 	std::string initializationType = sim_pars.initializationType; //"random" or "parameter". For latter option, see below
+	if (initializationType != "random" && initializationType != "parameter"){
+		std::cout << "Invalid entry for initializationType";
+		return 92;
+	}
 
 	bool cauchyDist = sim_pars.cauchyDist; //If true, use caucy dist for mutations. If false, use normal dist
 
