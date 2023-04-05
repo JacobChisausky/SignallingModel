@@ -1,4 +1,5 @@
 dir <- "."
+dir <- "C:/Users/owner/Documents/DONE"
 list.files(dir)
 
 masterSummaryStats <- data.frame()
@@ -12,7 +13,7 @@ for (cur in dFiles){
   #Reading data and parameters
   dataReps <- read.csv(paste0(dir,"/",cur))
   params <- read.csv(paste0(dir,"/",pFiles[which(gsub(".*_params","",pFiles) == gsub(".*_data","",cur))])) #param and data files which match suffixes
-  
+  params
   for (r in 1:max(dataReps$rep)){
     data <- subset(dataReps,rep == r)
     

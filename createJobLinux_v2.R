@@ -33,6 +33,10 @@ fileName <- "testParams"   #The name of files CPP will write
 json_per_script <- 3 #Leave 0 to add all json files to one script. This allows jobs to be run in parallel - many json per script = sequential, few per script = parallel if you have multiple CPUs
 #json_per_script is ignored if jobType = "array" or "bat"
 
+parallelReplicates <- 1   #This is different from 'replicates' below. In the below replicates, all jobs are set up to run sequentially
+#In contrast, this will make replicates to be run in parallel. So, it will copy the entire job (including the number of replicates as given below)
+# and write them each to a different job
+
 seed <- 0  #If 0, use a rng to set seed. It will be recorded in param file in case you want to rerun a simulation. If you enter a nonzero value here, it will be used as seed
 N   <- c(10000)
 G   <- c(10000)
@@ -148,72 +152,75 @@ paramsNames <- c("seed","N","G","c1","c2","v1","v2","w1","w2","w3","w4","m","int
 #}
 #names<-sort(names)
 
-for (X1 in seed){
-  for (X2 in N){
-    for (X3 in G){
-      for (X4 in c1){
-        for (X5 in c2){
-          for (X6 in v1){
-            for (X7 in v2){
-              for (X8 in w1){
-                for (X9 in w2){
-                  for (X10 in w3){
-                    for (X11 in w4){
-                      for (X12 in m){
-                        for (X13 in interactionPartners){
-                          for (X14 in mutRateAlpha){
-                            if (sameMutRatesAB == 1){
-                              mutRateBeta <- X14
-                            }
-                            for (X15 in mutRateBeta){
-                              for (X16 in mutRateStrategySender){
-                                if (sameMutRatesStrat == 1){
-                                  mutRateStrategyReceiver <- X16
-                                }
-                                for (X17 in mutRateStrategyReceiver){
-                                  for (X18 in mutStepAlpha){
-                                    if (sameMutSteps == 1){
-                                      mutStepBeta <- X18
-                                    }
-                                    for (X19 in mutStepBeta){
-                                      for (X20 in alphaBetaMutation){
-                                        for (X21 in initializationType){
-                                          for (X22 in cauchyDist){
-                                            for (X23 in initStrategySender){
-                                              for (X24 in initStrategyReceiver){
-                                                for (X25 in initAlpha){
-                                                  for (X26 in initBeta){
-                                                    for (X27 in replicates){
-                                                      for (X28 in coutReport){
-                                                        for (X29 in reportFreq){
-                                                          
-                                                          if (seed == 0){
-                                                            X1 <- sample(1:99999999, 1)
-                                                          }
-                                                          
-                                                          Xparams <- c(X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,X22,X23,X24,
-                                                                       X25,X26,X27,X28,X29,paste0("\"",fileName,"_",iterator,"\""),paste0("\"",".","\""))
-                                                          
-                                                          writeTo <- paste0(folderPath,"/",fileName,"_",iterator)
-                                                          
-                                                          
-                                                          
-                                                          txt <- "{\n\t"
-                                                          i <- 1
-                                                          for (i in 1:(length(paramsNames)-1)){
-                                                            txt <- paste(txt,"\"",paramsNames[i],"\": ",Xparams[i],",\n\t",sep="")
-                                                          }
-                                                          txt <- paste(txt,"\"",paramsNames[i+1],"\": ",Xparams[i+1],"\n",
-                                                                       "}",sep="")
-                                                          
-                                                          fileConn<-file(paste0(writeTo,"_params.json"))
-                                                          writeLines(txt,fileConn)
-                                                          close(fileConn)
-                                                          
-                                                          fileNameList<-append(fileNameList,paste0(fileName,"_",iterator))
-                                                          
-                                                          iterator <- iterator + 1
-                                                        }}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+for (pR in 1:parallelReplicates){
+  
+  for (X1 in seed){
+    for (X2 in N){
+      for (X3 in G){
+        for (X4 in c1){
+          for (X5 in c2){
+            for (X6 in v1){
+              for (X7 in v2){
+                for (X8 in w1){
+                  for (X9 in w2){
+                    for (X10 in w3){
+                      for (X11 in w4){
+                        for (X12 in m){
+                          for (X13 in interactionPartners){
+                            for (X14 in mutRateAlpha){
+                              if (sameMutRatesAB == 1){
+                                mutRateBeta <- X14
+                              }
+                              for (X15 in mutRateBeta){
+                                for (X16 in mutRateStrategySender){
+                                  if (sameMutRatesStrat == 1){
+                                    mutRateStrategyReceiver <- X16
+                                  }
+                                  for (X17 in mutRateStrategyReceiver){
+                                    for (X18 in mutStepAlpha){
+                                      if (sameMutSteps == 1){
+                                        mutStepBeta <- X18
+                                      }
+                                      for (X19 in mutStepBeta){
+                                        for (X20 in alphaBetaMutation){
+                                          for (X21 in initializationType){
+                                            for (X22 in cauchyDist){
+                                              for (X23 in initStrategySender){
+                                                for (X24 in initStrategyReceiver){
+                                                  for (X25 in initAlpha){
+                                                    for (X26 in initBeta){
+                                                      for (X27 in replicates){
+                                                        for (X28 in coutReport){
+                                                          for (X29 in reportFreq){
+                                                            
+                                                            if (seed == 0){
+                                                              X1 <- sample(1:99999999, 1)
+                                                            }
+                                                            
+                                                            Xparams <- c(X1,X2,X3,X4,X5,X6,X7,X8,X9,X10,X11,X12,X13,X14,X15,X16,X17,X18,X19,X20,X21,X22,X23,X24,
+                                                                         X25,X26,X27,X28,X29,paste0("\"",fileName,"_",iterator,"\""),paste0("\"",".","\""))
+                                                            
+                                                            writeTo <- paste0(folderPath,"/",fileName,"_",iterator)
+                                                            
+                                                            
+                                                            
+                                                            txt <- "{\n\t"
+                                                            i <- 1
+                                                            for (i in 1:(length(paramsNames)-1)){
+                                                              txt <- paste(txt,"\"",paramsNames[i],"\": ",Xparams[i],",\n\t",sep="")
+                                                            }
+                                                            txt <- paste(txt,"\"",paramsNames[i+1],"\": ",Xparams[i+1],"\n",
+                                                                         "}",sep="")
+                                                            
+                                                            fileConn<-file(paste0(writeTo,"_params.json"))
+                                                            writeLines(txt,fileConn)
+                                                            close(fileConn)
+                                                            
+                                                            fileNameList<-append(fileNameList,paste0(fileName,"_",iterator))
+                                                            
+                                                            iterator <- iterator + 1
+                                                          }}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+}
 
 ##------------Creating .bat and .sh files
 #bat file for windows

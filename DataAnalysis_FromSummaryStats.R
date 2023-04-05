@@ -9,9 +9,10 @@ library(gtable)
 # Receiver Strategy 2: Always A1.
 # Receiver Strategy 3: If receipt of signal, A2. Otherwise A1.
 
+#Trajectory (summaryStats.csv) analyses
 dir <- "C:/Users/owner/Documents/DONE"
 list.files(dir)
-selection <- 5
+selection <- 9
 
 #Read data
 masterSummaryStats <- read.csv(paste0(dir,"/",list.files(dir)[selection]))
@@ -62,10 +63,15 @@ lab <- paste0("Params:\n\nN: ",toString(unique(D$N)),
 )
 #### ####
 
+variableParams
+
 
 #Plot of replicate trajectories ####
 ggplot(data=D,aes(x=as.numeric(gen)/100)) +
-  facet_grid(indType~as.numeric(fileNumber)) +
+  
+  #facet_grid(indType~as.numeric(fileNumber)) +
+  facet_grid(indType~c2+interactionPartners+mutStepAlpha+as.numeric(fileNumber)) +
+  
   geom_line(aes(y=expAlphaBeta*N)) +
   geom_point(aes(y=as.numeric(stratNum),color=paste0(stratType)),size=1) +
   geom_line(aes(y=as.numeric(stratNum),color=paste0(stratType)),alpha=0.1) +
@@ -106,104 +112,5 @@ ggplot(data=D,aes(x=as.numeric(gen)/100)) +
 #### ####
 
 
-#Endpoint Statistics ####
-#Where does the simulation 'end' ?
-masterEndStats <- data.frame()
 
-#Set a % cutoff to look at last x% of data from a simulation
-cutoff <- .25
-
-#Set a tolerance - simulations within this range of equilibrium are considered at equilibrium
-tolerance <- .10
-
-# Mean alpha per rep
-# Mean beta per rep
-# Strategy breakdown per rep
-
-
-for (fn in unique(masterSummaryStats$fileNumber)){
-  repData <- subset(masterSummaryStats,fileNumber == fn)
-  endData <- subset(repData, gen >= max(gen) - cutoff*max(gen))  
-  pm <- endData[1,] #for parameters
-
-  meanAlpha <- mean(subset(endData,indType == "Sender")$meanAlphaBeta)
-  meanBeta <- mean(subset(endData,indType == "Receiver")$meanAlphaBeta)
-  
-  sdAlpha <- sd(subset(endData,indType == "Sender")$meanAlphaBeta)
-  sdBeta <- sd(subset(endData,indType == "Receiver")$meanAlphaBeta)
-  
-  meanSS1 <- mean(subset(endData,indType == "Sender" & stratType == "strat1")$stratNum)/N
-  meanSS2 <- mean(subset(endData,indType == "Sender" & stratType == "strat2")$stratNum)/N
-  meanSS3 <- mean(subset(endData,indType == "Sender" & stratType == "strat3")$stratNum)/N
-  meanRS1 <- mean(subset(endData,indType == "Receiver" & stratType == "strat1")$stratNum)/N
-  meanRS2 <- mean(subset(endData,indType == "Receiver" & stratType == "strat2")$stratNum)/N
-  meanRS3 <- mean(subset(endData,indType == "Receiver" & stratType == "strat3")$stratNum)/N
-  
-  sdSS1 <- sd((subset(endData,indType == "Sender" & stratType == "strat1")$stratNum)/N)
-  sdSS2 <- sd((subset(endData,indType == "Sender" & stratType == "strat2")$stratNum)/N)
-  sdSS3 <- sd((subset(endData,indType == "Sender" & stratType == "strat3")$stratNum)/N)
-  sdRS1 <- sd((subset(endData,indType == "Receiver" & stratType == "strat1")$stratNum)/N)
-  sdRS2 <- sd((subset(endData,indType == "Receiver" & stratType == "strat2")$stratNum)/N)
-  sdRS3 <- sd((subset(endData,indType == "Receiver" & stratType == "strat3")$stratNum)/N)
-  
-  expAlpha <- subset(endData,indType=="Sender")[1,]$expAlphaBeta
-  expBeta <- subset(endData,indType=="Receiver")[1,]$expAlphaBeta
-
-  #expected sender and receiver strategies - ONLY FOR ZOLLMAN PARAMETERS (v, w = 0 or 1)
-  expEquilibZoll <- "_"
-  if (pm$c1 < 1 & pm$c2 >= 1){
-    expEquilibZoll <- "separating honest"
-  } else if (pm$c1 < pm$c2 & pm$c2 < 1){
-    expEquilibZoll <- "hybrid"
-  } else if (pm$c2 <= pm$c1 & pm$c1 < 1){
-    expEquilibZoll <= "pooling all signal"
-  } else if (pm$c2 > 1 & pm$c1 > 1){
-    expEquilibZoll <= "pooling no signal"
-  } else if (pm$c2 < 1 & pm$c1 >= 1){
-    expEquilibZoll <- "pooling no signal - reverse"
-  }
-  if (pm$c1 < 0 || pm$c2 < 0){
-    expEquilibZoll <- paste0(expEquilibZoll,", negative costs")
-  }
-
-  #Detect big 'switches' - if the max abundance of two strategies in the interval each reach >50%, detect a switch
-  switchS <- 0
-  switchR <- 0
-  
-  maxSS1 <- max((subset(endData,indType == "Sender" & stratType == "strat1")$stratNum)/N)
-  maxSS2 <- max((subset(endData,indType == "Sender" & stratType == "strat2")$stratNum)/N)
-  maxSS3 <- max((subset(endData,indType == "Sender" & stratType == "strat3")$stratNum)/N)
-  maxRS1 <- max((subset(endData,indType == "Receiver" & stratType == "strat1")$stratNum)/N)
-  maxRS2 <- max((subset(endData,indType == "Receiver" & stratType == "strat2")$stratNum)/N)
-  maxRS3 <- max((subset(endData,indType == "Receiver" & stratType == "strat3")$stratNum)/N)
-  
-  if (maxSS1 > 0.5 & maxSS2 > 0.5){
-    switchS <- 1
-  } else if (maxSS2 > 0.5 & maxSS3 > 0.5){
-    switchS <- 1
-  } else if (maxSS1 > 0.5 & maxSS3 > 0.5){
-    switchS <- 1
-  }
-  if (maxRS1 > 0.5 & maxRS2 > 0.5){
-    switchR <- 1
-  } else if (maxRS2 > 0.5 & maxRS3 > 0.5){
-    switchR <- 1
-  } else if (maxRS1 > 0.5 & maxRS3 > 0.5){
-    switchR <- 1
-  }
-  
-  #What % deviation are we away from equilibrium? 
-  devAlpha <- meanAlpha - expAlpha
-  devBeta <- meanBeta - expBeta    
-  
-  
-}
-
-
-
-
-
-
-
-
-
+#Endpoint (endStats.csv) analyses
