@@ -38,8 +38,8 @@ parallelReplicates <- 1   #This is different from 'replicates' below. In the bel
 # and write them each to a different job
 
 seed <- 0  #If 0, use a rng to set seed. It will be recorded in param file in case you want to rerun a simulation. If you enter a nonzero value here, it will be used as seed
-N   <- c(10000)
-G   <- c(10000)
+N   <- c(1000)
+G   <- c(50000)
 c1  <- c(0.25)
 c2  <- c(0.75,0.45)
 v1  <- c(1)
@@ -96,6 +96,7 @@ sameMutSteps      <- 1  #If 1, then mutStepAlpha will replace the value for mutS
 #Time allocation estimate
 if (auto_time == TRUE){
   minuteEst <- (0.000000005) * max(G) * max(N) * max(interactionPartners) * (1.5 / (max(interactionPartners)+5)) * max(replicates)
+  minuteEst <- max(minuteEst,2)
   
   #Give twice as much time as expected to be safe
   minuteAlloc <- minuteEst * 2
@@ -112,6 +113,7 @@ if (auto_time == TRUE){
   hpc_time <- paste0(dAlloc,"-",hAlloc,":",rem,":00")
 }
 
+hpc_time
 
 #Add time to folder path in same way as cpp - so that alphabetically, the newest folder is always last
 t_hr <- format(Sys.time(), "%H")

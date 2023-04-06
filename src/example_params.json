@@ -29,5 +29,6 @@
 	"coutReport": 0,
 	"reportFreq": 50,
 	"dataFileName": "same",
-	"dataFileFolder": "C:/Users/owner/Documents/S4/Simulation"
+	"dataFileFolder": "C:/Users/owner/Documents/S4/Simulation",
+	"computeMeansInCpp": true
 }

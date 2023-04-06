@@ -164,6 +164,9 @@ int main(int argc, char* argv[]) {
 	std::string dataFileName = sim_pars.dataFileName;
 	std::string dataFileFolder = sim_pars.dataFileFolder;
 
+	//Add option to compute generational means in CPP instead of exporting all data, becaues with large N the .csv files become difficult to work with
+	bool computeMeansInCpp = sim_pars.computeMeansInCpp;
+
 	//_________End parameter input
 
 
@@ -172,6 +175,7 @@ int main(int argc, char* argv[]) {
 
 	std::ofstream dataLog;
 	std::ofstream params;
+	std::ofstream summaryStats;
 
 	tm *ltm = localtime(&now);
 	int yday = ltm->tm_yday;
@@ -194,13 +198,21 @@ int main(int argc, char* argv[]) {
 	string strTime = to_string(yday) + "_" +  hr + "_" + min + "_" + sec;
 	string str1 = dataFileFolder + "/" + strTime + "_data_" +  dataFileName + ".csv";
 	string str2 = dataFileFolder + "/" + strTime + "_params_" + dataFileName + ".csv";
+	string str3 = dataFileFolder + "/" + strTime + "_summaryStats_" + dataFileName + ".csv";
 	dataLog.open(str1);
 	params.open(str2);
 
+	if (computeMeansInCpp == true){
+		summaryStats.open(str3);
+	}
 
+	//Prepare output files
 	dataLog << "rep,gen,ind,indType,sendType,strategy,alphaBeta,fitness";
 	params << "seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initializationType,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates,alphaBetaMutation,cauchyDist";
 	params << "\n" << to_string(seed) << "," << to_string(N) <<","<< to_string(G) <<","<< to_string(c1) <<","<< to_string(c2) <<","<< to_string(v1)<<","<<to_string(v2)<<","<<to_string(w1)<<","<<to_string(w2)<<","<<to_string(w3)<<","<<to_string(w4)<<","<<to_string(m)<<","<<to_string(interactionPartners)<<","<<to_string(mutRateAlpha)<<","<<to_string(mutRateBeta)<<","<<to_string(mutRateStrategySender)<<","<<to_string(mutRateStrategyReceiver)<<","<<to_string(mutStepAlpha)<<","<<to_string(mutStepBeta)<<","<<initializationType<<","<<to_string(initStrategySender)<<","<<to_string(initStrategyReceiver)<<","<<to_string(initAlpha)<<","<<to_string(initBeta)<<","<<to_string(replicates)<<","<<alphaBetaMutation<<","<<to_string(cauchyDist),"\n";
+	if (computeMeansInCpp == true){
+		summaryStats << "rep,gen,indType,stratNum,stratType,meanAlphaBeta,meanFit,expAlphaBeta";
+	}
 
 	auto MutationDistAlpha = std::normal_distribution<double>(0.0, std::abs(mutStepAlpha));
 	auto MutationDistBeta = std::normal_distribution<double>(0.0, std::abs(mutStepBeta));
@@ -211,8 +223,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	//Random number generators
-	//auto rd = std::random_device {}; 	//This should be changed to a parameterized seed variable
-	//auto rng = std::default_random_engine { rd() };
 	auto rng = std::default_random_engine {seed};
 	std::uniform_real_distribution<double> prob(0,1);
 	std::uniform_int_distribution bol(1,3);
@@ -226,6 +236,10 @@ int main(int argc, char* argv[]) {
 	for (int i = 0; i < N; i++){
 		nullVec.push_back(i);
 	}
+
+	//Expected alpha and beta
+	double expAlpha = std::max(std::min( (m/(1-m)), 1.0),0.0);
+	double expBeta = std::max( std::min( c2 , 1.0), 0.0);
 
 	//Determine max and min possible fitnesses for normalization
 	double maxReceiverFit = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
@@ -571,9 +585,9 @@ int main(int argc, char* argv[]) {
 				}
 			}
 
-		//	if (g%500 == 0){
-		//		cout <<" " << g;
-		//	}
+			//	if (g%500 == 0){
+			//		cout <<" " << g;
+			//	}
 
 			if (g%reportFreq == 0){
 				if (coutReport == 1){
@@ -587,12 +601,89 @@ int main(int argc, char* argv[]) {
 					cout << "\n--------------------------\n";
 				}
 
-				for (int i = 0; i < N; i++){
-					dataLog << "\n" << rep << "," << g << "," << i << ",Sender," << SenderVector[i].Type << "," << SenderVector[i].Strategy << "," << SenderVector[i].Alpha << "," << SenderVector[i].fitness;
-				}
+				if (computeMeansInCpp == false){
 
-				for (int i = 0; i < N; i++){
-					dataLog << "\n" << rep << "," << g << "," << i << ",Receiver,na," << ReceiverVector[i].Strategy << "," << ReceiverVector[i].Beta << "," << ReceiverVector[i].fitness;
+					for (int i = 0; i < N; i++){
+						dataLog << "\n" << rep << "," << g << "," << i << ",Sender," << SenderVector[i].Type << "," << SenderVector[i].Strategy << "," << SenderVector[i].Alpha << "," << SenderVector[i].fitness;
+					}
+
+					for (int i = 0; i < N; i++){
+						dataLog << "\n" << rep << "," << g << "," << i << ",Receiver,na," << ReceiverVector[i].Strategy << "," << ReceiverVector[i].Beta << "," << ReceiverVector[i].fitness;
+					}
+				} else {
+					//Compute means
+					// rep, gen, indType, stratNum, stratType, meanAlphaBeta, meanFit, expAlphaBeta, fileNumber
+					int numSS1 = 0;
+					int numSS2 = 0;
+					int numSS3 = 0;
+					int numRS1 = 0;
+					int numRS2 = 0;
+					int numRS3 = 0;
+
+					long double totalAlpha = 0.0;
+					long double totalBeta = 0.0;
+
+					long double totalFitSS1 = 0.0;
+					long double totalFitSS2 = 0.0;
+					long double totalFitSS3 = 0.0;
+
+					long double totalFitRS1 = 0.0;
+					long double totalFitRS2 = 0.0;
+					long double totalFitRS3 = 0.0;
+
+					for (int i = 0; i < N; i++){
+						if (SenderVector[i].Strategy == 1){
+							numSS1 += 1;
+							totalFitSS1 += SenderVector[i].fitness;
+						} else if (SenderVector[i].Strategy == 2){
+							numSS2 += 1;
+							totalFitSS2 += SenderVector[i].fitness;
+						} else {
+							numSS3 += 1;
+							totalFitSS3 += SenderVector[i].fitness;
+						}
+						if (ReceiverVector[i].Strategy == 1){
+							numRS1 += 1;
+							totalFitRS1 += ReceiverVector[i].fitness;
+						} else if (ReceiverVector[i].Strategy == 2){
+							numRS2 += 1;
+							totalFitRS2 += ReceiverVector[i].fitness;
+						} else {
+							numRS3 += 1;
+							totalFitRS3 += ReceiverVector[i].fitness;
+						}
+
+						totalAlpha += SenderVector[i].Alpha;
+						totalBeta += ReceiverVector[i].Beta;
+
+						//totalFitS += SenderVector[i].fitness;
+						//totalFitR += ReceiverVector[i].fitness;
+					}
+
+					double meanAlpha = totalAlpha/N;
+					double meanBeta = totalBeta/N;
+
+					//double meanFitS = totalFitS/N;
+					//double meanFitR = totalFitR/N;
+
+					double meanFitSS1 = totalFitSS1/double(numSS1);
+					double meanFitSS2 = totalFitSS2/double(numSS2);
+					double meanFitSS3 = totalFitSS3/double(numSS3);
+
+					double meanFitRS1 = totalFitRS1/double(numRS1);
+					double meanFitRS2 = totalFitRS2/double(numRS2);
+					double meanFitRS3 = totalFitRS3/double(numRS3);
+
+
+					//                      rep          gen    indType    stratNum    stratType   meanAlphaBeta         meanFit         expAlphaBeta
+					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS1 << ",strat1," << meanAlpha << "," << meanFitSS1 << "," << expAlpha;
+					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS2 << ",strat2," << meanAlpha << "," << meanFitSS2 << "," << expAlpha;
+					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS3 << ",strat3," << meanAlpha << "," << meanFitSS3 << "," << expAlpha;
+					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS1 << ",strat1," << meanBeta << "," << meanFitRS1 << "," << expBeta;
+					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS2 << ",strat2," << meanBeta << "," << meanFitRS2 << "," << expBeta;
+					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS3 << ",strat3," << meanBeta << "," << meanFitRS3 << "," << expBeta;
+
+					//Write means to summaryStats log.
 				}
 			}
 
@@ -606,6 +697,7 @@ int main(int argc, char* argv[]) {
 
 	dataLog.close();
 	params.close();
+	summaryStats.close();
 
 	std::cout << "\nDone";
 	return 0;

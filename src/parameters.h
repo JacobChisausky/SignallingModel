@@ -36,6 +36,7 @@ struct parameters
 	int reportFreq = 50; //Export data every this many generations
 	std::string dataFileName = "same";
 	std::string dataFileFolder = "C:/Users/owner/Documents/S4/Simulation";
+	bool computeMeansInCpp = true;
 };
 
 void from_json(const nlohmann::json& j, parameters& p);

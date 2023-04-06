@@ -33,5 +33,5 @@ void from_json(const nlohmann::json& j, parameters& t)
 	NLOHMANN_JSON_FROM(reportFreq);
 	NLOHMANN_JSON_FROM(dataFileName);
 	NLOHMANN_JSON_FROM(dataFileFolder);
-
+	NLOHMANN_JSON_FROM(computeMeansInCpp);
 }
