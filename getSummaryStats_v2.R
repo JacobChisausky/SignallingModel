@@ -1,10 +1,14 @@
-dir <- "."
+#dir <- "."
+dir <- "C:/Users/owner/Documents/DONE"
 list.files(dir)
 
 masterSummaryStats <- data.frame()
 
 dFiles <- list.files(paste0(dir,"/"),"data.*.csv")
 pFiles <- list.files(paste0(dir,"/"),"params.*.csv")
+
+dFiles
+pFiles
 
 fileNumber <- 1
 

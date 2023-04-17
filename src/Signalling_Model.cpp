@@ -211,7 +211,7 @@ int main(int argc, char* argv[]) {
 	params << "seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initializationType,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates,alphaBetaMutation,cauchyDist";
 	params << "\n" << to_string(seed) << "," << to_string(N) <<","<< to_string(G) <<","<< to_string(c1) <<","<< to_string(c2) <<","<< to_string(v1)<<","<<to_string(v2)<<","<<to_string(w1)<<","<<to_string(w2)<<","<<to_string(w3)<<","<<to_string(w4)<<","<<to_string(m)<<","<<to_string(interactionPartners)<<","<<to_string(mutRateAlpha)<<","<<to_string(mutRateBeta)<<","<<to_string(mutRateStrategySender)<<","<<to_string(mutRateStrategyReceiver)<<","<<to_string(mutStepAlpha)<<","<<to_string(mutStepBeta)<<","<<initializationType<<","<<to_string(initStrategySender)<<","<<to_string(initStrategyReceiver)<<","<<to_string(initAlpha)<<","<<to_string(initBeta)<<","<<to_string(replicates)<<","<<alphaBetaMutation<<","<<to_string(cauchyDist),"\n";
 	if (computeMeansInCpp == true){
-		summaryStats << "rep,gen,indType,stratNum,stratType,meanAlphaBeta,meanFit,expAlphaBeta";
+		summaryStats << "rep,gen,indType,stratNum,stratType,meanAlphaBeta,meanFit,expAlphaBeta,seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initializationType,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates,alphaBetaMutation,cauchyDist";
 	}
 
 	auto MutationDistAlpha = std::normal_distribution<double>(0.0, std::abs(mutStepAlpha));
@@ -242,19 +242,47 @@ int main(int argc, char* argv[]) {
 	double expBeta = std::max( std::min( c2 , 1.0), 0.0);
 
 	//Determine max and min possible fitnesses for normalization
-	double maxReceiverFit = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
-	double minReceiverFit = double(interactionPartners)*double(std::min(w1,std::min(w2,std::min(w3,w4))));
-	double maxSenderFit = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
-	double minSenderFit = double(interactionPartners)*(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
+	//	double maxReceiverFit = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
+	//	double minReceiverFit = double(interactionPartners)*double(std::min(w1,std::min(w2,std::min(w3,w4))));
+	//	double maxSenderFit = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
+	//	double minSenderFit = double(interactionPartners)*(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
 
-	cout << maxReceiverFit << endl << minReceiverFit << endl << maxSenderFit << endl << minSenderFit << endl;
+	double maxReceiverFit = 100;
+	double minReceiverFit = -100;
+	double maxSenderFit = 100;
+	double minSenderFit = -100;
 
-	if (minReceiverFit == maxReceiverFit){	//To avoid divide by 0
+	double maxReceiverFitOld = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
+	double minReceiverFitOld = double(interactionPartners)*double(std::min(w1,std::min(w2,std::min(w3,w4))));
+	double maxSenderFitOld = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
+	double minSenderFitOld = double(interactionPartners)*(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
+
+	if (maxReceiverFitOld > maxReceiverFit){
+		std::cout << "Possible receiver fitness too high (>100)";
+		return -1000;
+	}
+	if (minReceiverFitOld < minReceiverFit){
+		std::cout << "Possible receiver fitness too low (<-100)";
+		return -1000;
+	}
+	if (maxSenderFitOld > maxSenderFit){
+		std::cout << "Possible sender fitness too high (>100)";
+		return -1000;
+	}
+	if (minSenderFitOld < minSenderFit){
+		std::cout << "Possible sender fitness too low (<-100)";
+		return -1000;
+	}
+
+
+	cout << maxReceiverFitOld << endl << minReceiverFitOld << endl << maxSenderFitOld << endl << minSenderFitOld << endl;
+
+	/*if (minReceiverFit == maxReceiverFit){	//To avoid divide by 0
 		maxReceiverFit += 0.00001;
 	}
 	if (minSenderFit == maxSenderFit){
 		maxSenderFit += 0.00001;
-	}
+	}*/
 
 	//Start replicate loop
 	for (int rep = 1; rep <= replicates; rep++){
@@ -372,7 +400,7 @@ int main(int argc, char* argv[]) {
 		//Fitness = T1,Sig,A1 + T1,Sig,A2 + T2,Sig,A1 + T2,Sig,A2 + T1,noSig,A1 + T1,noSig,A2 + T2,noSig,A1 + T2,noSig,A2
 		(m*(v1-c1)*(numRS1*meanBeta+numRS2)/N) +
 				(m*(0-c1)*(numRS1*(1-meanBeta)+numRS3)/N) +
-	wip
+	work in progress...
 			 */
 
 			//Method 2 - Pairwise Comparisons
@@ -500,13 +528,13 @@ int main(int argc, char* argv[]) {
 			}
 			 */
 
-			for (int i = 0; i < N; i++){
+			/*	for (int i = 0; i < N; i++){
 				if (SenderVector[i].fitness < minSenderFit){
 					//	cout << SenderVector[i].fitness << " " << minSenderFit <<" minYYY";
 					//return 2;
 				}
 			}
-			//cout << endl;
+			 */	//cout << endl;
 
 			for (int i = 0; i < N; i++){
 				//With normalization
@@ -584,10 +612,6 @@ int main(int argc, char* argv[]) {
 					}
 				}
 			}
-
-			//	if (g%500 == 0){
-			//		cout <<" " << g;
-			//	}
 
 			if (g%reportFreq == 0){
 				if (coutReport == 1){
@@ -675,13 +699,13 @@ int main(int argc, char* argv[]) {
 					double meanFitRS3 = totalFitRS3/double(numRS3);
 
 
-					//                      rep          gen    indType    stratNum    stratType   meanAlphaBeta         meanFit         expAlphaBeta
-					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS1 << ",strat1," << meanAlpha << "," << meanFitSS1 << "," << expAlpha;
-					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS2 << ",strat2," << meanAlpha << "," << meanFitSS2 << "," << expAlpha;
-					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS3 << ",strat3," << meanAlpha << "," << meanFitSS3 << "," << expAlpha;
-					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS1 << ",strat1," << meanBeta << "," << meanFitRS1 << "," << expBeta;
-					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS2 << ",strat2," << meanBeta << "," << meanFitRS2 << "," << expBeta;
-					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS3 << ",strat3," << meanBeta << "," << meanFitRS3 << "," << expBeta;
+					//                      rep          gen    indType    stratNum    stratType   meanAlphaBeta         meanFit         expAlphaBeta | Params |
+					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS1 << ",strat1," << meanAlpha << "," << meanFitSS1 << "," << expAlpha  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
+					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS2 << ",strat2," << meanAlpha << "," << meanFitSS2 << "," << expAlpha  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
+					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS3 << ",strat3," << meanAlpha << "," << meanFitSS3 << "," << expAlpha  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
+					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS1 << ",strat1," << meanBeta << "," << meanFitRS1 << "," << expBeta  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
+					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS2 << ",strat2," << meanBeta << "," << meanFitRS2 << "," << expBeta  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
+					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS3 << ",strat3," << meanBeta << "," << meanFitRS3 << "," << expBeta  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
 
 					//Write means to summaryStats log.
 				}
