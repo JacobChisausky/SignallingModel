@@ -225,7 +225,7 @@ int main(int argc, char* argv[]) {
 	//Random number generators
 	auto rng = std::default_random_engine {seed};
 	std::uniform_real_distribution<double> prob(0,1);
-	std::uniform_int_distribution bol(1,3);
+	std::uniform_int_distribution<int> randInt(1,3);
 
 	//Fitness distribution
 	auto SenderFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
@@ -310,8 +310,8 @@ int main(int argc, char* argv[]) {
 			}
 		} else if (initializationType == "random"){
 			for (int i = 0; i < N; i++){
-				SenderVector.push_back(Sender(bol(rng),prob(rng)));
-				ReceiverVector.push_back(Receiver(bol(rng),prob(rng)));
+				SenderVector.push_back(Sender(randInt(rng),prob(rng)));
+				ReceiverVector.push_back(Receiver(randInt(rng),prob(rng)));
 
 				OffspringSenderVector.push_back(Sender(1,0));
 				OffspringReceiverVector.push_back(Receiver(1,1));
@@ -567,9 +567,9 @@ int main(int argc, char* argv[]) {
 			//Mutation
 			for (int i = 0; i < N; i++){
 				if (prob(rng) < mutRateStrategySender){
-					int mut = bol(rng);
+					int mut = randInt(rng);
 					while (OffspringSenderVector[i].Strategy == mut){
-						mut = bol(rng);
+						mut = randInt(rng);
 					}
 					OffspringSenderVector[i].Strategy = mut;
 					if (mut == 1 && alphaBetaMutation == "random"){
@@ -578,9 +578,9 @@ int main(int argc, char* argv[]) {
 				}
 
 				if (prob(rng) < mutRateStrategyReceiver){
-					int mut = bol(rng);
+					int mut = randInt(rng);
 					while (OffspringReceiverVector[i].Strategy == mut){
-						mut = bol(rng);
+						mut = randInt(rng);
 					}
 					OffspringReceiverVector[i].Strategy = mut;
 					if (mut == 1 && alphaBetaMutation == "random"){
