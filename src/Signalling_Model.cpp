@@ -247,10 +247,10 @@ int main(int argc, char* argv[]) {
 	//	double maxSenderFit = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
 	//	double minSenderFit = double(interactionPartners)*(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
 
-	double maxReceiverFit = 100;
-	double minReceiverFit = -100;
-	double maxSenderFit = 100;
-	double minSenderFit = -100;
+	double maxReceiverFit = 100.0;
+	double minReceiverFit = -100.0;
+	double maxSenderFit = 100.0;
+	double minSenderFit = -100.0;
 
 	double maxReceiverFitOld = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
 	double minReceiverFitOld = double(interactionPartners)*double(std::min(w1,std::min(w2,std::min(w3,w4))));
@@ -541,11 +541,11 @@ int main(int argc, char* argv[]) {
 				//Round to nearest 4 decimal places - because double numbers are imprecise, there are errors when comparing using <. E.g., 0.7 < 0.7 will evaluate as true sometimes for doubles.
 				//This causes errors because sender fitnesses after normalization can be slightly negative. Rounding fixes the issue.
 				//Though there is likely a faster way to resolve this.
-				if (SenderVector[i].fitness < minSenderFit){
-					SenderFitnesses[i] = round(  (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit) * 10000 ) / 10000;
-				} else {
+			//	if (SenderVector[i].fitness < minSenderFit){
+			//		SenderFitnesses[i] = round(  (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit) * 10000 ) / 10000;
+			//	} else {
 					SenderFitnesses[i] = (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit);
-				}
+			//	}
 				ReceiverFitnesses[i] = (ReceiverVector[i].fitness - minReceiverFit)/(maxReceiverFit-minReceiverFit);
 
 			}

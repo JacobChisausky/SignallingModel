@@ -245,6 +245,11 @@ for (i in summaryFiles){
 head(honestInvAll)
 honestInvAll$concatStrat <- paste0(honestInvAll$indType,"_",honestInvAll$stratType)
 
+
+
+
+
+
 honestInvAll$shortStrat <- ""
 for (i in 1:nrow(honestInvAll)){
   if (honestInvAll[i,]$concatStrat=="Receiver_strat1"){
@@ -359,6 +364,187 @@ for (i in unique(honestInvAll2A$fileNum)){
   
  
 }
+
+
+
+
+#Exper 2D - New Normalization Routine #### 
+dirExp2D <- "C:/Users/owner/Documents/DONE/Exper_2D"
+summaryFilesExp2D <- list.files(dirExp2D,"*summaryStats*")
+
+#First - create endData stats from summaryStats files produced by cpp
+cutoff <- 0.25   #Look at last this % of generations
+iterator <- 1
+endDataAllExp2D<-data.frame()
+for (i in summaryFilesExp2D){
+  
+  dataAllReps <- read.csv(paste0(dirExp2D,"/",i))
+  
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    
+    data$fileName <- i
+    dataEnd <- subset(data,gen>=((max(gen)-(cutoff*max(gen)))))
+    dataEnd$concatStrat <- paste0(dataEnd$indType,"_",dataEnd$stratType)
+    
+    dataEndSenders <- subset(dataEnd,indType == "Sender")
+    meanAlpha <- mean(dataEndSenders$meanAlphaBeta)
+    dataEndReceivers <- subset(dataEnd,indType == "Receiver")
+    meanBeta <- mean(dataEndReceivers$meanAlphaBeta)
+    
+    row <- data.frame()
+    for (j in unique(dataEnd$concatStrat)){
+      temp <- subset(dataEnd,concatStrat == j)
+      row <- temp[1,]
+      if (row$indType == "Receiver"){
+        row$meanAlphaBeta <- meanBeta
+      } else {
+        row$meanAlphaBeta <- meanAlpha
+      }
+      
+      
+      row$fileSuffix <- gsub("_[0-9]","",gsub("_*..csv","",gsub(".*summaryStats_","",row$fileName)))
+      row$meanFit <- mean(temp$meanFit)
+      row$meanStratNum <- mean(temp$stratNum)
+      row$meanStratFreq <- mean(temp$stratNum/row$N)
+      row$stratNum <- "NA"
+      row$gen <- "NA"
+      row$fileNum <- iterator
+      
+      endDataAllExp2D <- rbind(endDataAllExp2D,row)
+      
+    }
+    iterator <- iterator + 1
+  }
+}
+
+head(endDataAllExp2D)
+
+#### #### 
+
+
+#Organize parameters for all simulations
+masterParams <- list()
+variableParams <- c()
+paramNames <- c()
+for (c in which(colnames(endDataAllExp2D) == "N"):which(colnames(endDataAllExp2D) == "fileSuffix")){
+  masterParams[[c+1-which(colnames(endDataAllExp2D) == "N")]] <- unique(endDataAllExp2D[,c])
+  paramNames <- c(paramNames,colnames(endDataAllExp2D)[c])
+  if(length(unique(endDataAllExp2D[,c])) > 1 ){
+    variableParams<- c(variableParams,colnames(endDataAllExp2D)[c])
+  }
+}
+names(masterParams) <- paramNames
+N <- as.numeric(masterParams$N)
+###
+print(variableParams)
+masterParams
+
+
+
+endDataAllExp2D$c1c2 <- paste0(endDataAllExp2D$c1,"_",endDataAllExp2D$c2)
+
+#Add column to order along x axis
+collect2<-data.frame()
+for (i in unique(endDataAllExp2D$c1c2)){
+  temp <- subset(endDataAllExp2D,c1c2==i)
+  iterator <- 1
+  temp
+  collect1 <- data.frame()
+  for (j in unique(temp$fileNum)){
+    temp2 <- subset(temp,fileNum==j)
+    temp2$orderedFileNum <- iterator
+    temp2
+    collect1<-rbind(collect1,temp2)
+    iterator <- iterator + 1
+  }
+  collect2<-rbind(collect2,collect1)
+}
+collect2$orderedFileNum
+
+endDataAllExp2DOrderedReduced <- collect2
+
+head(endDataAllExp2DOrderedReduced)
+for (i in 1:nrow(endDataAllExp2DOrderedReduced)){
+  if (endDataAllExp2DOrderedReduced[i,]$c2<=endDataAllExp2DOrderedReduced[i,]$c1){
+    if (endDataAllExp2DOrderedReduced[i,]$indType=="Sender"){
+      endDataAllExp2DOrderedReduced[i,]$expAlphaBeta <- 1
+    } else {
+      endDataAllExp2DOrderedReduced[i,]$expAlphaBeta <- 0
+    }
+  }
+  else if (endDataAllExp2DOrderedReduced[i,]$c2>=1 & endDataAllExp2DOrderedReduced[i,]$c1 < 1){
+    if (endDataAllExp2DOrderedReduced[i,]$indType=="Sender"){
+      endDataAllExp2DOrderedReduced[i,]$expAlphaBeta <- 0
+    } else {
+      endDataAllExp2DOrderedReduced[i,]$expAlphaBeta <- 1
+    }
+  }
+}
+
+#endDataAllExp2DOrderedReduced <- subset(endDataAllExp2DOrderedReduced,orderedFileNum<=50)
+
+endDataAllExp2DOrderedReduced
+
+library(ggplot2)
+#install.packages("rlang")
+
+#plot
+ggplot(subset(endDataAllExp2DOrderedReduced,mutStepAlpha==0.25),aes(x=orderedFileNum)) +
+  geom_point(aes(y=meanStratFreq,color=stratType),alpha=.7) + 
+  geom_point(aes(y=meanAlphaBeta),shape="X") +
+  geom_line(aes(y=expAlphaBeta),color="orange",alpha=0.9,size=.8) +
+  theme_bw() +
+  facet_grid(c1+indType~c2) + 
+  labs(x="Replicate",y="Strategy Freq or Alpha or Beta") +
+  labs(subtitle = "c2") + 
+  labs(color =  "c1\n\n\nStrategy") +
+  labs(title = "NewNorm")
+ggsave("NewNorm.png",
+       device="png",path=dir,height=8,width=10,unit="in")
+
+#Next - look at mean fitnesses
+head(endDataAllExp2DOrderedReduced)
+endDataAllExp2DOrderedReduced$shortStrat <- ""
+for (i in 1:nrow(endDataAllExp2DOrderedReduced)){
+  if (endDataAllExp2DOrderedReduced[i,]$concatStrat=="Receiver_strat1"){
+    endDataAllExp2DOrderedReduced[i,]$shortStrat <- "RS1"
+  }
+  if (endDataAllExp2DOrderedReduced[i,]$concatStrat=="Receiver_strat2"){
+    endDataAllExp2DOrderedReduced[i,]$shortStrat <- "RS2"
+  }
+  if (endDataAllExp2DOrderedReduced[i,]$concatStrat=="Receiver_strat3"){
+    endDataAllExp2DOrderedReduced[i,]$shortStrat <- "RS3"
+  }
+  if (endDataAllExp2DOrderedReduced[i,]$concatStrat=="Sender_strat1"){
+    endDataAllExp2DOrderedReduced[i,]$shortStrat <- "SS1"
+  }
+  if (endDataAllExp2DOrderedReduced[i,]$concatStrat=="Sender_strat2"){
+    endDataAllExp2DOrderedReduced[i,]$shortStrat <- "SS2"
+  }
+  if (endDataAllExp2DOrderedReduced[i,]$concatStrat=="Sender_strat3"){
+    endDataAllExp2DOrderedReduced[i,]$shortStrat <- "SS3"
+  }
+}
+
+ggplot(endDataAllExp2DOrderedReduced,aes(x=as.factor(shortStrat))) +
+  geom_jitter(aes(y=meanFit,color=shortStrat),alpha=.5,height=0) + 
+  geom_jitter(aes(y=meanStratFreq),color="grey",alpha=.5,height=0) + 
+  geom_jitter(aes(y=meanStratFreq),color="grey",alpha=.5,height=0) + 
+  geom_jitter(aes(y=meanAlphaBeta),color="orange",alpha=.5,height=0,shape="X") +
+  theme_bw() +
+  facet_grid(c2~c1) +
+  ylim(0,1) + 
+  labs(title="Hybrid Expectation - Fitnesses") +
+  labs(x="Strategy",y="Mean Fitness") +
+  labs(subtitle="c1") +
+  labs(color="c2\n\n\nStrategy") +
+  labs(caption="Grey: Frequency of strategy\nOrange X: Alpha or Beta")
+
+ggsave("NegCostFitsAndEquilib.png",
+       device="png",path=dir,height=8,width=10,unit="in")
+
+
 
 
 
