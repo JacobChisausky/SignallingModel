@@ -58,6 +58,9 @@ public:
 
 int main(int argc, char* argv[]) {
 
+	int selectionMethod = 2; //1 = normalized roulette. 2 = k-tournament
+	//int k = 2;	//for k tournament selection - for now, code only written to support k=2
+
 	//Notes
 	//When c1 and c2 are close, alpha is much lower than expectation (N = 1000)
 
@@ -226,12 +229,13 @@ int main(int argc, char* argv[]) {
 	auto rng = std::default_random_engine {seed};
 	std::uniform_real_distribution<double> prob(0,1);
 	std::uniform_int_distribution<int> randInt(1,3);
+	std::uniform_int_distribution<int> randN(0,N-1);
 
 	//Fitness distribution
 	auto SenderFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
 	auto ReceiverFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
 
-	//Vector used for drawing random numbers
+	//Vector used for drawing random numbers without replacement
 	std::vector<int> nullVec;
 	for (int i = 0; i < N; i++){
 		nullVec.push_back(i);
@@ -257,23 +261,24 @@ int main(int argc, char* argv[]) {
 	double maxSenderFitOld = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
 	double minSenderFitOld = double(interactionPartners)*(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
 
-	if (maxReceiverFitOld > maxReceiverFit){
-		std::cout << "Possible receiver fitness too high (>100)";
-		return -1000;
+	if (selectionMethod == 1){
+		if (maxReceiverFitOld > maxReceiverFit){
+			std::cout << "Possible receiver fitness too high (>100)";
+			return -1000;
+		}
+		if (minReceiverFitOld < minReceiverFit){
+			std::cout << "Possible receiver fitness too low (<-100)";
+			return -1000;
+		}
+		if (maxSenderFitOld > maxSenderFit){
+			std::cout << "Possible sender fitness too high (>100)";
+			return -1000;
+		}
+		if (minSenderFitOld < minSenderFit){
+			std::cout << "Possible sender fitness too low (<-100)";
+			return -1000;
+		}
 	}
-	if (minReceiverFitOld < minReceiverFit){
-		std::cout << "Possible receiver fitness too low (<-100)";
-		return -1000;
-	}
-	if (maxSenderFitOld > maxSenderFit){
-		std::cout << "Possible sender fitness too high (>100)";
-		return -1000;
-	}
-	if (minSenderFitOld < minSenderFit){
-		std::cout << "Possible sender fitness too low (<-100)";
-		return -1000;
-	}
-
 
 	cout << maxReceiverFitOld << endl << minReceiverFitOld << endl << maxSenderFitOld << endl << minSenderFitOld << endl;
 
@@ -536,33 +541,81 @@ int main(int argc, char* argv[]) {
 			}
 			 */	//cout << endl;
 
-			for (int i = 0; i < N; i++){
-				//With normalization
-				//Round to nearest 4 decimal places - because double numbers are imprecise, there are errors when comparing using <. E.g., 0.7 < 0.7 will evaluate as true sometimes for doubles.
-				//This causes errors because sender fitnesses after normalization can be slightly negative. Rounding fixes the issue.
-				//Though there is likely a faster way to resolve this.
-			//	if (SenderVector[i].fitness < minSenderFit){
-			//		SenderFitnesses[i] = round(  (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit) * 10000 ) / 10000;
-			//	} else {
+			if (selectionMethod == 1){
+				for (int i = 0; i < N; i++){
+					//With normalization
+					//	if (SenderVector[i].fitness < minSenderFit){
+					//		SenderFitnesses[i] = round(  (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit) * 10000 ) / 10000;
+					//	} else {
 					SenderFitnesses[i] = (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit);
-			//	}
-				ReceiverFitnesses[i] = (ReceiverVector[i].fitness - minReceiverFit)/(maxReceiverFit-minReceiverFit);
+					//	}
+					ReceiverFitnesses[i] = (ReceiverVector[i].fitness - minReceiverFit)/(maxReceiverFit-minReceiverFit);
+				}
 
+				SenderFitnessDist.mutate(SenderFitnesses.cbegin(), SenderFitnesses.cend());
+				ReceiverFitnessDist.mutate(ReceiverFitnesses.cbegin(), ReceiverFitnesses.cend());
+
+				//Determining parents of offspring. Store offspring in Offspring vector
+				for (int i = 0; i < N; i++){
+					//cout << SenderFitnessDist(rng) << " ";
+					OffspringSenderVector[i] = SenderVector[SenderFitnessDist(rng)];
+					OffspringReceiverVector[i] = ReceiverVector[ReceiverFitnessDist(rng)];
+
+					OffspringSenderVector[i].fitness = 0;
+					OffspringReceiverVector[i].fitness = 0;
+					OffspringSenderVector[i].Type = 2;
+				}
+
+			} else if (selectionMethod == 2){	//k-tournament selection
+				//First, pick k individuals (k=2)
+				//Determine highest fitness one
+				//If tie, pick random
+				//Winner reproduces
+				//Repeat
+				//randN(rng) produces random int from 0 to N-1
+
+				for (int n = 0; n < N; n++){
+					int rand1 = randN(rng);
+					int rand2 = randN(rng);
+					while (rand1 == rand2){
+						rand2 = randN(rng);
+					}
+					if (SenderVector[rand1].fitness > SenderVector[rand2].fitness){
+						OffspringSenderVector[n] = SenderVector[rand1];
+						OffspringSenderVector[n].fitness = 0;
+						OffspringReceiverVector[n].fitness = 0;
+						OffspringSenderVector[n].Type = 2;
+					} else if (SenderVector[rand1].fitness < SenderVector[rand2].fitness){
+						OffspringSenderVector[n] = SenderVector[rand2];
+						OffspringSenderVector[n].fitness = 0;
+						OffspringReceiverVector[n].fitness = 0;
+						OffspringSenderVector[n].Type = 2;
+					} else {
+						OffspringSenderVector[n] = SenderVector[rand1];
+						OffspringSenderVector[n].fitness = 0;
+						OffspringReceiverVector[n].fitness = 0;
+						OffspringSenderVector[n].Type = 2;
+					}
+
+					//Receivers
+					rand1 = randN(rng);
+					rand2 = randN(rng);
+					while (rand1 == rand2){
+						rand2 = randN(rng);
+					}
+					if (ReceiverVector[rand1].fitness > ReceiverVector[rand2].fitness){
+						OffspringReceiverVector[n] = ReceiverVector[rand1];
+						OffspringReceiverVector[n].fitness = 0;
+					} else if (ReceiverVector[rand1].fitness < ReceiverVector[rand2].fitness){
+						OffspringReceiverVector[n] = ReceiverVector[rand2];
+						OffspringReceiverVector[n].fitness = 0;
+					} else {
+						OffspringReceiverVector[n] = ReceiverVector[rand1];
+						OffspringReceiverVector[n].fitness = 0;
+					}
+				}
 			}
 
-			SenderFitnessDist.mutate(SenderFitnesses.cbegin(), SenderFitnesses.cend());
-			ReceiverFitnessDist.mutate(ReceiverFitnesses.cbegin(), ReceiverFitnesses.cend());
-
-			//Determining parents of offspring. Store offspring in Offspring vector
-			for (int i = 0; i < N; i++){
-				//cout << SenderFitnessDist(rng) << " ";
-				OffspringSenderVector[i] = SenderVector[SenderFitnessDist(rng)];
-				OffspringReceiverVector[i] = ReceiverVector[ReceiverFitnessDist(rng)];
-
-				OffspringSenderVector[i].fitness = 0;
-				OffspringReceiverVector[i].fitness = 0;
-				OffspringSenderVector[i].Type = 2;
-			}
 
 			//Mutation
 			for (int i = 0; i < N; i++){
@@ -716,7 +769,6 @@ int main(int argc, char* argv[]) {
 			ReceiverVector.swap(OffspringReceiverVector);
 
 		}//End Generation Loop
-
 	}//End replicate loop
 
 	dataLog.close();
