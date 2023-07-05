@@ -2018,12 +2018,503 @@ for (xc1 in unique(endDataAll4OrderedReduced$c1)){
   }
 }
 
+#Exper 5 - fixes - honest start ####
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/fixes_honest"
+summaryFiles5 <- list.files(dir5,"*summaryStats*")
+#First - create endData stats from summaryStats files produced by cpp
+cutoff <- 0.25   #Look at last this % of generations
+iterator <- 1
+endDataAll5<-data.frame()
+
+for (i in summaryFiles5){
+  
+  dataAllReps <- read.csv(paste0(dir5,"/",i))
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    
+    data$fileName <- i
+    dataEnd <- subset(data,gen>=((max(gen)-(cutoff*max(gen)))))
+    dataEnd$concatStrat <- paste0(dataEnd$indType,"_",dataEnd$stratType)
+    
+    dataEndSenders <- subset(dataEnd,indType == "Sender")
+    meanAlpha <- mean(dataEndSenders$meanAlphaBeta)
+    dataEndReceivers <- subset(dataEnd,indType == "Receiver")
+    meanBeta <- mean(dataEndReceivers$meanAlphaBeta)
+    
+    #remove NA from mean fit - it messes things up later... Just make 0s
+    dataEnd$meanFit <- replace(dataEnd$meanFit, dataEnd$meanFit == "NaN", 0)
+    
+    
+    row <- data.frame()
+    for (j in unique(dataEnd$concatStrat)){
+      temp <- subset(dataEnd,concatStrat == j)
+      row <- temp[1,]
+      if (row$indType == "Receiver"){
+        row$meanAlphaBeta <- meanBeta
+      } else {
+        row$meanAlphaBeta <- meanAlpha
+      }
+      
+      
+      row$fileSuffix <- gsub("_[0-9]","",gsub("_*..csv","",gsub(".*summaryStats_","",row$fileName)))
+      row$meanFit <- mean(temp$meanFit)
+      row$meanStratNum <- mean(temp$stratNum)
+      row$meanStratFreq <- mean(temp$stratNum/row$N)
+      row$stratNum <- "NA"
+      row$gen <- "NA"
+      row$fileNum <- iterator
+      
+      endDataAll5 <- rbind(endDataAll5,row)
+      
+    }
+    iterator <- iterator + 1
+  }
+}
+endDataAll5$c1c2 <- paste0(endDataAll5$c1,"_",endDataAll5$c2)
+endDataAll5$lab <- paste0(endDataAll5$c1,
+                          "_",endDataAll5$m,
+                          "_",endDataAll5$initializationType,
+                          "_",endDataAll5$cauchyDist,
+                          "_",endDataAll5$mutRateAlpha,
+                          "_",endDataAll5$mutRateStrategySender,
+                          "_",endDataAll5$c2
+)
+write.csv(endDataAll5,file=paste0(dir5,"/_endDataAll5.csv"), row.names=FALSE)
+
+endDataAll5OrderedReduced<-endDataAll5
+for (i in 1:nrow(endDataAll5OrderedReduced)){
+  if (endDataAll5OrderedReduced[i,]$c2<=endDataAll5OrderedReduced[i,]$c1){
+    if (endDataAll5OrderedReduced[i,]$indType=="Sender"){
+      endDataAll5OrderedReduced[i,]$expAlphaBeta <- 1
+    } else {
+      endDataAll5OrderedReduced[i,]$expAlphaBeta <- 0
+    }
+  }
+  else if (endDataAll5OrderedReduced[i,]$c2>=1 & endDataAll5OrderedReduced[i,]$c1 < 1){
+    if (endDataAll5OrderedReduced[i,]$indType=="Sender"){
+      endDataAll5OrderedReduced[i,]$expAlphaBeta <- 0
+    } else {
+      endDataAll5OrderedReduced[i,]$expAlphaBeta <- 1
+    }
+  }
+}
+
+#..check
+sort(unique(endDataAll5OrderedReduced$c1))
+
+write.csv(endDataAll5OrderedReduced,file=paste0(dir5,"/_endDataAll5_orderedReduced.csv"), row.names=FALSE)
+#HERE... ..
+
+endDataAll5OrderedReduced <- read.csv(paste0(dir5,"/_endDataAll5_orderedReduced.csv"))
+
+equilibsAll<-data.frame()
+#### Determine Equilibs ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #add tol to equilib file name
+  tolerance <- tol
+  toleranceStrategy <- tol #can be changed
+  
+  unique(endDataAll5OrderedReduced$c1)
+  dAll <- endDataAll5OrderedReduced
+  head(dAll)
+  dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
+  equilibs <- data.frame()
+  
+  #inspecting data here
+  #dAll$mutRateAlpha
+  #subset(dAll, c1 < 0 & c2 < 0 & c2 == c1 & mutRateStrategySender == 0.0001 & mutRateAlpha == 0.1)
+  
+  i <- 1
+  while (i <= nrow(dAll)){
+    
+    #determine dominant sender and receiver strat
+    row <- dAll[i,]
+    #determine expected dominant strategies
+    
+    #senders
+    s<-dAll[i:(i+2),]
+    #dominant sender strat
+    domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType
+    devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)[1]
+    expAlpha <- unique(s$expAlphaBeta)[1]
+    alpha <- unique(s$meanAlphaBeta)[1]
+    meanSendFit <- sum(s$meanFit * s$meanStratFreq)
+    #Also find out out the strategy deviation?
+    #receivers
+    r<-dAll[(i+3):(i+5),]
+    
+    domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType
+    devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)[1]
+    expBeta <- unique(r$expAlphaBeta)[1]
+    beta <- unique(r$meanAlphaBeta)[1]
+    meanRecFit <- sum(r$meanFit * r$meanStratFreq)
+    
+    #Correcting tolerance for mutation pressure
+    tolerance <- tol + ( ( (s[1,]$mutRateAlpha*s[1,]$mutStepAlpha) +
+                             (r[1,]$mutRateBeta*r[1,]$mutStepBeta)
+    ) / 2 )
+    
+    stratsOkay <- FALSE
+    #For non-pooling:
+    if (s[1,]$meanStratFreq > 1-(toleranceStrategy + s[1,]$mutRateStrategySender) & 
+        r[1,]$meanStratFreq > 1-(toleranceStrategy + r[1,]$mutRateStrategyReceiver)){
+      stratsOkay <- TRUE
+    }
+    if (stratsOkay == FALSE){
+      equilib <- "Pooling"
+    } else {  #strats okay
+      #Rewriting equilibrium definitions
+      
+      distToExp_alpha <- abs(expAlpha - alpha)
+      distToHonest_alpha <- abs(0 - alpha)
+      distToPool_alpha <- abs(1 - alpha)
+      
+      distToExp_beta <- abs(expBeta - beta)
+      distToHonest_beta <- abs(1 - beta)
+      distToPool_beta <- abs(0 - beta)
+      
+      meanDistToExp <- (distToExp_alpha + distToExp_beta)/2 
+      meanDistToHonest <- (distToHonest_alpha + distToHonest_beta)/2 
+      meanDistToPool <- (distToPool_alpha + distToPool_beta)/2 
+      
+      distToExp_alpha
+      distToHonest_alpha
+      distToPool_alpha
+      
+      equilib<-"none selected yet"
+      
+      #One problem - negative c1 and c2 change expectations.
+      #Pooling 
+      
+      if (alpha >= (1-tolerance)){
+        equilib <- "Pooling"
+      }
+      if (beta <= tolerance){
+        equilib <- "Pooling"
+      }
+      
+      #Honest
+      if (alpha < tolerance & beta > (1-tolerance)){
+        equilib <- "Honest"
+      }
+      
+      if (equilib == "none selected yet"){
+        #This means we are not in zone for hybrid or honest
+        #Meaning we don't need to worry about overlap between hybrid and honest zones
+        if (abs(devAlpha) < tolerance & abs(devBeta) < tolerance){
+          equilib <- "Hybrid Good"
+        } else { #Not honest, not pooling, not Hybrid Good
+          equilib <- "Hybrid Poor"
+        }
+      }
+      
+      #Determine overlap between honest and hybrid zone
+      if (equilib == "Honest"){
+        #Is it closer to honest or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToHonest){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+      #Determine overlap between pooling and hybrid zone
+      if (equilib == "Pooling"){
+        #Is it closer to pooling or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToPool){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+    }
+    
+    row$domSendStrat <- domSendStrat
+    row$domRecStrat <- domRecStrat
+    row$meanSendFit <- meanSendFit
+    row$meanRecFit <- meanRecFit
+    row$devAlpha <- devAlpha
+    row$devBeta <- devBeta
+    row$alpha <- alpha
+    row$beta <- beta
+    row$equilib <- equilib
+    equilibs <- rbind(equilibs,row)
+    
+    i <- i + 6  
+  }
+  equilibs$tol <- tol
+  equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
+  
+  #### saved data ####
+  write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsTolHonest.csv"), row.names=FALSE)
+}
+
+dirFix <- dir5
+dirOriginal <- "D:/StAndrews/SignallingDiscrete/Exper5/honest_all"
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  fix <-read.csv(paste0(dirFix,"/",tol,"_equilibsTolHonest.csv"))
+  orig <-read.csv(paste0(dirOriginal,"/",tol,"_equilibsTolHonest.csv"))
+  
+  both <- rbind(orig,fix)
+  #### Thesis data ####
+  write.csv(both,file=paste0(dirOriginal,"/",tol,"_equilibsTolHonest_Fixed.csv"), row.names=FALSE)
+}
+
+#Exper 5 - fixes - noSig start ####
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/fixes_noSig"
+summaryFiles5 <- list.files(dir5,"*summaryStats*")
+#First - create endData stats from summaryStats files produced by cpp
+cutoff <- 0.25   #Look at last this % of generations
+iterator <- 1
+endDataAll5<-data.frame()
+
+for (i in summaryFiles5){
+  
+  dataAllReps <- read.csv(paste0(dir5,"/",i))
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    
+    data$fileName <- i
+    dataEnd <- subset(data,gen>=((max(gen)-(cutoff*max(gen)))))
+    dataEnd$concatStrat <- paste0(dataEnd$indType,"_",dataEnd$stratType)
+    
+    dataEndSenders <- subset(dataEnd,indType == "Sender")
+    meanAlpha <- mean(dataEndSenders$meanAlphaBeta)
+    dataEndReceivers <- subset(dataEnd,indType == "Receiver")
+    meanBeta <- mean(dataEndReceivers$meanAlphaBeta)
+    
+    #remove NA from mean fit - it messes things up later... Just make 0s
+    dataEnd$meanFit <- replace(dataEnd$meanFit, dataEnd$meanFit == "NaN", 0)
+    
+    
+    row <- data.frame()
+    for (j in unique(dataEnd$concatStrat)){
+      temp <- subset(dataEnd,concatStrat == j)
+      row <- temp[1,]
+      if (row$indType == "Receiver"){
+        row$meanAlphaBeta <- meanBeta
+      } else {
+        row$meanAlphaBeta <- meanAlpha
+      }
+      
+      
+      row$fileSuffix <- gsub("_[0-9]","",gsub("_*..csv","",gsub(".*summaryStats_","",row$fileName)))
+      row$meanFit <- mean(temp$meanFit)
+      row$meanStratNum <- mean(temp$stratNum)
+      row$meanStratFreq <- mean(temp$stratNum/row$N)
+      row$stratNum <- "NA"
+      row$gen <- "NA"
+      row$fileNum <- iterator
+      
+      endDataAll5 <- rbind(endDataAll5,row)
+      
+    }
+    iterator <- iterator + 1
+  }
+}
+endDataAll5$c1c2 <- paste0(endDataAll5$c1,"_",endDataAll5$c2)
+endDataAll5$lab <- paste0(endDataAll5$c1,
+                          "_",endDataAll5$m,
+                          "_",endDataAll5$initializationType,
+                          "_",endDataAll5$cauchyDist,
+                          "_",endDataAll5$mutRateAlpha,
+                          "_",endDataAll5$mutRateStrategySender,
+                          "_",endDataAll5$c2
+)
+write.csv(endDataAll5,file=paste0(dir5,"/_endDataAll5.csv"), row.names=FALSE)
+
+endDataAll5OrderedReduced<-endDataAll5
+for (i in 1:nrow(endDataAll5OrderedReduced)){
+  if (endDataAll5OrderedReduced[i,]$c2<=endDataAll5OrderedReduced[i,]$c1){
+    if (endDataAll5OrderedReduced[i,]$indType=="Sender"){
+      endDataAll5OrderedReduced[i,]$expAlphaBeta <- 1
+    } else {
+      endDataAll5OrderedReduced[i,]$expAlphaBeta <- 0
+    }
+  }
+  else if (endDataAll5OrderedReduced[i,]$c2>=1 & endDataAll5OrderedReduced[i,]$c1 < 1){
+    if (endDataAll5OrderedReduced[i,]$indType=="Sender"){
+      endDataAll5OrderedReduced[i,]$expAlphaBeta <- 0
+    } else {
+      endDataAll5OrderedReduced[i,]$expAlphaBeta <- 1
+    }
+  }
+}
+
+#..check
+sort(unique(endDataAll5OrderedReduced$c1))
+
+write.csv(endDataAll5OrderedReduced,file=paste0(dir5,"/_endDataAll5_orderedReduced.csv"), row.names=FALSE)
+
+endDataAll5OrderedReduced <- read.csv(paste0(dir5,"/_endDataAll5_orderedReduced.csv"))
+
+equilibsAll<-data.frame()
+#### Determine Equilibs ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #add tol to equilib file name
+  tolerance <- tol
+  toleranceStrategy <- tol #can be changed
+  
+  unique(endDataAll5OrderedReduced$c1)
+  dAll <- endDataAll5OrderedReduced
+  head(dAll)
+  dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
+  equilibs <- data.frame()
+  
+  #inspecting data here
+  #dAll$mutRateAlpha
+  #subset(dAll, c1 < 0 & c2 < 0 & c2 == c1 & mutRateStrategySender == 0.0001 & mutRateAlpha == 0.1)
+  
+  i <- 1
+  while (i <= nrow(dAll)){
+    
+    #determine dominant sender and receiver strat
+    row <- dAll[i,]
+    #determine expected dominant strategies
+    
+    #senders
+    s<-dAll[i:(i+2),]
+    #dominant sender strat
+    domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType
+    devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)[1]
+    expAlpha <- unique(s$expAlphaBeta)[1]
+    alpha <- unique(s$meanAlphaBeta)[1]
+    meanSendFit <- sum(s$meanFit * s$meanStratFreq)
+    #Also find out out the strategy deviation?
+    #receivers
+    r<-dAll[(i+3):(i+5),]
+    
+    domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType
+    devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)[1]
+    expBeta <- unique(r$expAlphaBeta)[1]
+    beta <- unique(r$meanAlphaBeta)[1]
+    meanRecFit <- sum(r$meanFit * r$meanStratFreq)
+    
+    #Correcting tolerance for mutation pressure
+    tolerance <- tol + ( ( (s[1,]$mutRateAlpha*s[1,]$mutStepAlpha) +
+                             (r[1,]$mutRateBeta*r[1,]$mutStepBeta)
+    ) / 2 )
+    
+    stratsOkay <- FALSE
+    #For non-pooling:
+    if (s[1,]$meanStratFreq > 1-(toleranceStrategy + s[1,]$mutRateStrategySender) & 
+        r[1,]$meanStratFreq > 1-(toleranceStrategy + r[1,]$mutRateStrategyReceiver)){
+      stratsOkay <- TRUE
+    }
+    if (stratsOkay == FALSE){
+      equilib <- "Pooling"
+    } else {  #strats okay
+      #Rewriting equilibrium definitions
+      
+      distToExp_alpha <- abs(expAlpha - alpha)
+      distToHonest_alpha <- abs(0 - alpha)
+      distToPool_alpha <- abs(1 - alpha)
+      
+      distToExp_beta <- abs(expBeta - beta)
+      distToHonest_beta <- abs(1 - beta)
+      distToPool_beta <- abs(0 - beta)
+      
+      meanDistToExp <- (distToExp_alpha + distToExp_beta)/2 
+      meanDistToHonest <- (distToHonest_alpha + distToHonest_beta)/2 
+      meanDistToPool <- (distToPool_alpha + distToPool_beta)/2 
+      
+      distToExp_alpha
+      distToHonest_alpha
+      distToPool_alpha
+      
+      equilib<-"none selected yet"
+      
+      #One problem - negative c1 and c2 change expectations.
+      #Pooling 
+      
+      if (alpha >= (1-tolerance)){
+        equilib <- "Pooling"
+      }
+      if (beta <= tolerance){
+        equilib <- "Pooling"
+      }
+      
+      #Honest
+      if (alpha < tolerance & beta > (1-tolerance)){
+        equilib <- "Honest"
+      }
+      
+      if (equilib == "none selected yet"){
+        #This means we are not in zone for hybrid or honest
+        #Meaning we don't need to worry about overlap between hybrid and honest zones
+        if (abs(devAlpha) < tolerance & abs(devBeta) < tolerance){
+          equilib <- "Hybrid Good"
+        } else { #Not honest, not pooling, not Hybrid Good
+          equilib <- "Hybrid Poor"
+        }
+      }
+      
+      #Determine overlap between honest and hybrid zone
+      if (equilib == "Honest"){
+        #Is it closer to honest or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToHonest){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+      #Determine overlap between pooling and hybrid zone
+      if (equilib == "Pooling"){
+        #Is it closer to pooling or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToPool){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+    }
+    
+    row$domSendStrat <- domSendStrat
+    row$domRecStrat <- domRecStrat
+    row$meanSendFit <- meanSendFit
+    row$meanRecFit <- meanRecFit
+    row$devAlpha <- devAlpha
+    row$devBeta <- devBeta
+    row$alpha <- alpha
+    row$beta <- beta
+    row$equilib <- equilib
+    equilibs <- rbind(equilibs,row)
+    
+    i <- i + 6  
+  }
+  equilibs$tol <- tol
+  equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
+  
+  #### saved data ####
+  write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsTolHonest.csv"), row.names=FALSE)
+}
+
+dirFix <- dir5
+dirOriginal <- "D:/StAndrews/SignallingDiscrete/Exper5/noSig_all"
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  fix <-read.csv(paste0(dirFix,"/",tol,"_equilibsTolHonest.csv"))
+  orig <-read.csv(paste0(dirOriginal,"/",tol,"_equilibsTolNoSig.csv"))
+  
+  both <- rbind(orig,fix)
+  write.csv(both,file=paste0(dirOriginal,"/",tol,"_equilibsTolNoSig_Fixed.csv"), row.names=FALSE)
+}
+tol
+nrow(orig)
+nrow(fix)
+x<-read.csv(paste0(dirOriginal,"/",tol,"_equilibsTolNoSig_Fixed.csv"))
+nrow(x)
 
 
 #Exper 5 - honest start ####
 dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/honest_all"
 summaryFiles5 <- list.files(dir5,"*summaryStats*")
-summaryFiles5
 #First - create endData stats from summaryStats files produced by cpp
 cutoff <- 0.25   #Look at last this % of generations
 iterator <- 1
@@ -2074,7 +2565,6 @@ for (i in summaryFiles5){
   }
 }
 #..do we have all c1 and c2 values here? Check val of iterator
-
 if (1==2){
   #Organize parameters for all simulations
   masterParams <- list()
@@ -2145,102 +2635,165 @@ for (i in 1:nrow(endDataAll5OrderedReduced)){
   }
 }
 
-unique(endDataAll5OrderedReduced$c1)
+#..check
+sort(unique(endDataAll5OrderedReduced$c1))
+
 write.csv(endDataAll5OrderedReduced,file=paste0(dir5,"/_endDataAll5_orderedReduced.csv"), row.names=FALSE)
+#HERE... ..
 
-#Determine Equilibs
-#for (tol in c(0.05,0.1,0.25,0.4)){
-tol <- 0.20
-#add tol to equilib file name
-tolerance <- tol
-unique(endDataAll5OrderedReduced$c1)
-dAll <- endDataAll5OrderedReduced
-head(dAll)
-dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
-equilibs <- data.frame()
+endDataAll5OrderedReduced <- read.csv(paste0(dir5,"/_endDataAll5_orderedReduced.csv"))
 
-i <- 1
-while (i <= nrow(dAll)){
+equilibsAll<-data.frame()
+#### Determine Equilibs ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #add tol to equilib file name
+  tolerance <- tol
+  toleranceStrategy <- tol #can be changed
   
-  #determine dominant sender and receiver strat
-  row <- dAll[i,]
-  #determine expected dominant strategies
+  unique(endDataAll5OrderedReduced$c1)
+  dAll <- endDataAll5OrderedReduced
+  head(dAll)
+  dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
+  equilibs <- data.frame()
   
-  #senders
-  s<-dAll[i:(i+2),]
-  #dominant sender strat
-  domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType
-  devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)
-  alpha <- unique(s$meanAlphaBeta)
-  meanSendFit <- sum(s$meanFit * s$meanStratFreq)
-  #Also find out out the strategy deviation?
+  #inspecting data here
+  #dAll$mutRateAlpha
+  #subset(dAll, c1 < 0 & c2 < 0 & c2 == c1 & mutRateStrategySender == 0.0001 & mutRateAlpha == 0.1)
   
-  #receivers
-  r<-dAll[(i+3):(i+5),]
-  
-  domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType
-  devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)
-  beta <- unique(r$meanAlphaBeta)
-  meanRecFit <- sum(r$meanFit * r$meanStratFreq)
-  
-  if (domRecStrat == "strat1" & domSendStrat == "strat1"){
-    if (beta >= (1 - tolerance) & alpha <= tolerance){
-      equilib <- "Honest"
-      #What if it falls within honest but is closer to hybrid?
-      if (beta < (1 - (tolerance/2)) & alpha > (tolerance/2)){
-        equilib <- "Hybrid"
-      }
-    } else if (abs(devBeta) < tolerance &  abs(devAlpha) < tolerance & unique(s$expAlphaBeta) > 0 & unique(r$expAlphaBeta) < 1){
-      equilib <- "Hybrid"
-    } else {
-      equilib<-"Pooling"
+  i <- 1
+  while (i <= nrow(dAll)){
+    
+    #determine dominant sender and receiver strat
+    row <- dAll[i,]
+    #determine expected dominant strategies
+    
+    #senders
+    s<-dAll[i:(i+2),]
+    #dominant sender strat
+    domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType
+    devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)[1]
+    expAlpha <- unique(s$expAlphaBeta)[1]
+    alpha <- unique(s$meanAlphaBeta)[1]
+    meanSendFit <- sum(s$meanFit * s$meanStratFreq)
+    #Also find out out the strategy deviation?
+    #receivers
+    r<-dAll[(i+3):(i+5),]
+    
+    domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType
+    devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)[1]
+    expBeta <- unique(r$expAlphaBeta)[1]
+    beta <- unique(r$meanAlphaBeta)[1]
+    meanRecFit <- sum(r$meanFit * r$meanStratFreq)
+    
+    #Correcting tolerance for mutation pressure
+    tolerance <- tol + ( ( (s[1,]$mutRateAlpha*s[1,]$mutStepAlpha) +
+                             (r[1,]$mutRateBeta*r[1,]$mutStepBeta)
+    ) / 2 )
+    
+    stratsOkay <- FALSE
+    #For non-pooling:
+    if (s[1,]$meanStratFreq > 1-(toleranceStrategy + s[1,]$mutRateStrategySender) & 
+        r[1,]$meanStratFreq > 1-(toleranceStrategy + r[1,]$mutRateStrategyReceiver)){
+      stratsOkay <- TRUE
     }
-  } else {
-    equilib <- "Pooling"
+    if (stratsOkay == FALSE){
+      equilib <- "Pooling"
+    } else {  #strats okay
+      #Rewriting equilibrium definitions
+      
+      distToExp_alpha <- abs(expAlpha - alpha)
+      distToHonest_alpha <- abs(0 - alpha)
+      distToPool_alpha <- abs(1 - alpha)
+      
+      distToExp_beta <- abs(expBeta - beta)
+      distToHonest_beta <- abs(1 - beta)
+      distToPool_beta <- abs(0 - beta)
+      
+      meanDistToExp <- (distToExp_alpha + distToExp_beta)/2 
+      meanDistToHonest <- (distToHonest_alpha + distToHonest_beta)/2 
+      meanDistToPool <- (distToPool_alpha + distToPool_beta)/2 
+      
+      distToExp_alpha
+      distToHonest_alpha
+      distToPool_alpha
+      
+      equilib<-"none selected yet"
+      
+      #One problem - negative c1 and c2 change expectations.
+      #Pooling 
+      
+      if (alpha >= (1-tolerance)){
+        equilib <- "Pooling"
+      }
+      if (beta <= tolerance){
+        equilib <- "Pooling"
+      }
+      
+      #Honest
+      if (alpha < tolerance & beta > (1-tolerance)){
+        equilib <- "Honest"
+      }
+      
+      if (equilib == "none selected yet"){
+        #This means we are not in zone for hybrid or honest
+        #Meaning we don't need to worry about overlap between hybrid and honest zones
+        if (abs(devAlpha) < tolerance & abs(devBeta) < tolerance){
+          equilib <- "Hybrid Good"
+        } else { #Not honest, not pooling, not Hybrid Good
+          equilib <- "Hybrid Poor"
+        }
+      }
+      
+      #Determine overlap between honest and hybrid zone
+      if (equilib == "Honest"){
+        #Is it closer to honest or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToHonest){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+      #Determine overlap between pooling and hybrid zone
+      if (equilib == "Pooling"){
+        #Is it closer to pooling or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToPool){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+    }
+    
+    row$domSendStrat <- domSendStrat
+    row$domRecStrat <- domRecStrat
+    row$meanSendFit <- meanSendFit
+    row$meanRecFit <- meanRecFit
+    row$devAlpha <- devAlpha
+    row$devBeta <- devBeta
+    row$alpha <- alpha
+    row$beta <- beta
+    row$equilib <- equilib
+    equilibs <- rbind(equilibs,row)
+    
+    i <- i + 6  
   }
+  equilibs$tol <- tol
+  equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
   
-  row$domSendStrat <- domSendStrat
-  row$domRecStrat <- domRecStrat
-  row$meanSendFit <- meanSendFit
-  row$meanRecFit <- meanRecFit
-  row$devAlpha <- devAlpha
-  row$devBeta <- devBeta
-  row$alpha <- alpha
-  row$beta <- beta
-  row$equilib <- equilib
-  equilibs <- rbind(equilibs,row)
-  
-  i <- i + 6  
+  #### saved data ####
+  write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsTolHonest.csv"), row.names=FALSE)
 }
 
-equilibs$tol <- tol
-equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
-#..
 
-#### saved data ####
-write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsAllHonest.csv"), row.names=FALSE)
-
-#I need to run some more negative c2.
-#And more positive c1
-#I've only done odds with odds and evens with evens. Which I like for readability
-#I can throw out all the 'extra value ones'
-#I will need to write more of a code for this in r probably
-#TO do:
-#c1 = 1.4, 1.6 with c2 0, -.2, -.4, -.6, .2, ... 1.6
-#c2 = -.2, -.4, -.6 with c1 = -.6, ... 1.6
-#Odd high
-#c1 = 1.5 with c2 0, -.1, -.3, -.5 ... 0.1 ... 1.5
-#
-#odd low
-#c2 = -0.1, -.3, -.5 with c1 = -.5, ... 1.5
-#
-#These jobs are running now 135_00-01_...
-
-#### Plots ####
+#### Plots - not faceted ####
 unique(equilibs$u)
-#For now - to show Graeme 5/16 tomorrow meeting
+
 for (i in unique(equilibs$u)){
-  data<-subset(equilibs,(equilibs$c2 >= 0) & u==i)
+  data<-subset(equilibs, u==i)
   
   library(scatterpie)
   
@@ -2262,8 +2815,9 @@ for (i in unique(equilibs$u)){
     pies <- rbind(pies,pRow)
   }
   pies2<-pies[,-1]
-  #For publication!
-  #This is for HONEST START. I am running more sims for odd c1 and c2 values to add to this.
+  #For publication? Probably opt for facets instead
+  
+  options(scipen = 999)
   
   p<-ggplot(data,aes(c1,c2)) +
     geom_vline(xintercept=1,linetype="dashed") + 
@@ -2273,68 +2827,81 @@ for (i in unique(equilibs$u)){
     geom_abline(intercept = 0, slope = 1, 
                 linetype="dashed") +
     geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
-                    cols = colnames(pies2)[3:5]) +
-    theme_bw() +
-    scale_fill_brewer(palette="Set1") +
-    labs(title = paste0(
-      "Mut Rate Alpha Beta: ",unique(data$mutRateAlpha),
-      "\nMut Rate Strategy: ",unique(data$mutRateStrategySender)
-    ))
+                    cols = colnames(pies2)[3:5],size=0.09) +
+    theme_minimal() +
+    scale_fill_manual(values=c("#49FC3CFC","#0099FF","#F58E8EFC")) +
+    labs(title = paste0("Honest Start",
+                        "\nMut Rate Alpha Beta: ",unique(data$mutRateAlpha),
+                        "\nMut Rate Strategy: ",unique(data$mutRateStrategySender))) +
+    labs(subtitle=paste0("Tolerance: ",tol,"\nMut Rate Strategy")) +
+    
+    p
   
-  ggsave(paste0(i,".png"),plot = p,
-         device="png",path=dir5,height=8,width=10,unit="in")
-  
-  
+  ggsave(paste0(i,"tol_",tol,"NewEquilibs.png"),plot = p,
+         device="png",be="white",path=dir5,height=8,width=9,unit="in")
 }
 
-#for (i in unique(equilibs$u))
-data<-subset(equilibs,c2 >= 0)
+
+#### Plots - faceted ####
 library(scatterpie)
-
-#making data for pie chart
-data$row <- paste0(data$c1,"_",data$c2,"_",data$u)
-pies <- data.frame()
-for (r in unique(data$row)){
-  dTemp <- subset(data,row==r)
-  sumHybrid <- sum(dTemp$equilib=="Hybrid")
-  sumHonest <- sum(dTemp$equilib=="Honest")
-  sumPooling <- sum(dTemp$equilib=="Pooling")
-  pRow<-data.frame(r)
-  pRow$c1Pie <- unique(dTemp$c1)
-  pRow$c2Pie <- unique(dTemp$c2)
-  pRow$Honest <- sumHonest
-  pRow$Hybrid <- sumHybrid
-  pRow$Pooling <- sumPooling
-  pRow$mutRateAlphaBeta <- unique(dTemp$mutRateAlpha)
-  pRow$mutRateStrat <- unique(dTemp$mutRateStrategySender)
-  pies <- rbind(pies,pRow)
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/honest_all"
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  equilibs<-read.csv(paste0(dir5,"/",tol,"_equilibsTolHonest.csv"))
+  data<-subset(equilibs)
+  #data<-x
+  
+  #making data for pie chart
+  data$row <- paste0(data$c1,"_",data$c2,"_",data$u)
+  pies <- data.frame()
+  for (r in unique(data$row)){
+    dTemp <- subset(data,row==r)
+    sumHybridGood <- sum(dTemp$equilib=="Hybrid Good")
+    sumHybridPoor <- sum(dTemp$equilib=="Hybrid Poor")
+    sumHonest <- sum(dTemp$equilib=="Honest")
+    sumPooling <- sum(dTemp$equilib=="Pooling")
+    pRow<-data.frame(r)
+    pRow$c1Pie <- unique(dTemp$c1)
+    pRow$c2Pie <- unique(dTemp$c2)
+    pRow$Honest <- sumHonest
+    pRow$Hybrid_Good <- sumHybridGood
+    pRow$Hybrid_Poor <- sumHybridPoor
+    pRow$Pooling <- sumPooling
+    pRow$mutRateAlphaBeta <- unique(dTemp$mutRateAlpha)
+    pRow$mutRateStrat <- unique(dTemp$mutRateStrategySender)
+    pies <- rbind(pies,pRow)
+  }
+  pies2<-pies[,-1]
+  
+  options(scipen = 999)
+  #### For thesis - facet pie plot ####
+  p<-ggplot(data,aes(c1,c2)) +
+    geom_vline(xintercept=1,linetype="dashed") + 
+    geom_vline(xintercept=0) + 
+    geom_hline(yintercept=1,linetype="dashed") + 
+    geom_hline(yintercept=0) + 
+    geom_abline(intercept = 0, slope = 1, 
+                linetype="dashed") +
+    geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
+                    cols = colnames(pies2)[3:6],size=0.09) +
+    theme_minimal() +
+    scale_fill_manual(values=c("#49FC3CFC","#BD4848FC","#F58E8EFC","#0099FF","black")) +
+    labs(title="Honest Start") +
+    labs(subtitle=paste0("Tolerance: ",tol,"\nMut Rate Strategy")) +
+    labs(fill="Mut Rate\nAlpha Beta\n\nEquilibrium") +
+    facet_grid(mutRateAlphaBeta~mutRateStrat) + 
+    theme(panel.spacing = unit(0, "lines"))
+  p
+  ggsave(paste0(tol,"_allNewEquilibs_Reverse.png"),plot=p,
+         device="png",bg="white",path=dir5,height=8,width=10,unit="in") #width was 10 for non subset
 }
-pies2<-pies[,-1]
+#Sims to look at: Where we get hybrid but shouldn't
+#honest start
+#c2 = c1 and c2 < c1 when both negative for mut ab = 0.01, 0.1 and mut strat = 1e-4
+#And c1=c2 
 
-p<-ggplot(data,aes(c1,c2)) +
-  geom_vline(xintercept=1,linetype="dashed") + 
-  geom_vline(xintercept=0) + 
-  geom_hline(yintercept=1,linetype="dashed") + 
-  geom_hline(yintercept=0) + 
-  geom_abline(intercept = 0, slope = 1, 
-              linetype="dashed") +
-  geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
-                  cols = colnames(pies2)[3:5]) +
-  theme_bw() +
-  scale_fill_brewer(palette="Set1") +
-  labs(title="Honest Start") +
-  labs(subtitle="Mut Rate Strategy") +
-  labs(fill="Mut Rate\nAlpha Beta\n\nEquilibrium") +
-  facet_grid(mutRateAlphaBeta~mutRateStrat)
-p
-ggsave(paste0("all.png"),plot=p,
-       device="png",path=dir5,height=8,width=10,unit="in")
-
-
-#Exper 5 - No Signal start ####
-dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/130_19_24_32_Exper_5a_noSig"
+#Exper 5 - no signalling start ####
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/noSig_all"
 summaryFiles5 <- list.files(dir5,"*summaryStats*")
-
 #First - create endData stats from summaryStats files produced by cpp
 cutoff <- 0.25   #Look at last this % of generations
 iterator <- 1
@@ -2385,7 +2952,6 @@ for (i in summaryFiles5){
   }
 }
 #..do we have all c1 and c2 values here? Check val of iterator
-
 if (1==2){
   #Organize parameters for all simulations
   masterParams <- list()
@@ -2456,125 +3022,897 @@ for (i in 1:nrow(endDataAll5OrderedReduced)){
   }
 }
 
-unique(endDataAll5OrderedReduced$c1)
+#..check
+sort(unique(endDataAll5OrderedReduced$c1))
+
 write.csv(endDataAll5OrderedReduced,file=paste0(dir5,"/_endDataAll5_orderedReduced.csv"), row.names=FALSE)
+#HERE... ..
 
-#Determine Equilibs
-#for (tol in c(0.05,0.1,0.25,0.4)){
-tol <- 0.20
-#add tol to equilib file name
-tolerance <- tol
-unique(endDataAll5OrderedReduced$c1)
-dAll <- endDataAll5OrderedReduced
-head(dAll)
-dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
-equilibs <- data.frame()
+endDataAll5OrderedReduced <- read.csv(paste0(dir5,"/_endDataAll5_orderedReduced.csv"))
 
-i <- 1
-while (i <= nrow(dAll)){
+equilibsAll<-data.frame()
+#### Determine Equilibs ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #add tol to equilib file name
+  tolerance <- tol
+  toleranceStrategy <- tol #can be changed
   
-  #determine dominant sender and receiver strat
-  row <- dAll[i,]
-  #determine expected dominant strategies
+  unique(endDataAll5OrderedReduced$c1)
+  dAll <- endDataAll5OrderedReduced
+  head(dAll)
+  dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
+  equilibs <- data.frame()
   
-  #senders
-  s<-dAll[i:(i+2),]
-  #dominant sender strat
-  domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType
-  devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)
-  alpha <- unique(s$meanAlphaBeta)
-  meanSendFit <- sum(s$meanFit * s$meanStratFreq)
-  #Also find out out the strategy deviation?
+  #inspecting data here
+  #dAll$mutRateAlpha
+  #subset(dAll, c1 < 0 & c2 < 0 & c2 == c1 & mutRateStrategySender == 0.0001 & mutRateAlpha == 0.1)
   
-  #receivers
-  r<-dAll[(i+3):(i+5),]
-  
-  domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType
-  devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)
-  beta <- unique(r$meanAlphaBeta)
-  meanRecFit <- sum(r$meanFit * r$meanStratFreq)
-  
-  if (domRecStrat == "strat1" & domSendStrat == "strat1"){
-    if (beta >= (1 - tolerance) & alpha <= tolerance){
-      equilib <- "Honest"
-      #What if it falls within honest but is closer to hybrid?
-      if (beta < (1 - (tolerance/2)) & alpha > (tolerance/2)){
-        equilib <- "Hybrid"
-      }
-    } else if (abs(devBeta) < tolerance &  abs(devAlpha) < tolerance & unique(s$expAlphaBeta) > 0 & unique(r$expAlphaBeta) < 1){
-      equilib <- "Hybrid"
-    } else {
-      equilib<-"Pooling"
+  i <- 1
+  while (i <= nrow(dAll)){
+    
+    #determine dominant sender and receiver strat
+    row <- dAll[i,]
+    #determine expected dominant strategies
+    
+    #senders
+    s<-dAll[i:(i+2),]
+    #dominant sender strat
+    domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType[1]
+    devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)[1]
+    expAlpha <- unique(s$expAlphaBeta)[1]
+    alpha <- unique(s$meanAlphaBeta)[1]
+    meanSendFit <- sum(s$meanFit * s$meanStratFreq)
+    #Also find out out the strategy deviation?
+    #receivers
+    r<-dAll[(i+3):(i+5),]
+    
+    domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType[1]
+    devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)[1]
+    expBeta <- unique(r$expAlphaBeta)[1]
+    beta <- unique(r$meanAlphaBeta)[1]
+    meanRecFit <- sum(r$meanFit * r$meanStratFreq)
+    
+    #Correcting tolerance for mutation pressure
+    tolerance <- tol + ( ( (s[1,]$mutRateAlpha*s[1,]$mutStepAlpha) +
+                             (r[1,]$mutRateBeta*r[1,]$mutStepBeta)
+    ) / 2 )
+    
+    stratsOkay <- FALSE
+    #For non-pooling:
+    if (s[1,]$meanStratFreq > 1-(toleranceStrategy + s[1,]$mutRateStrategySender) & 
+        r[1,]$meanStratFreq > 1-(toleranceStrategy + r[1,]$mutRateStrategyReceiver)){
+      stratsOkay <- TRUE
     }
-  } else {
-    equilib <- "Pooling"
+    if (stratsOkay == FALSE){
+      equilib <- "Pooling"
+    } else {  #strats okay
+      #Rewriting equilibrium definitions
+      
+      distToExp_alpha <- abs(expAlpha - alpha)
+      distToHonest_alpha <- abs(0 - alpha)
+      distToPool_alpha <- abs(1 - alpha)
+      
+      distToExp_beta <- abs(expBeta - beta)
+      distToHonest_beta <- abs(1 - beta)
+      distToPool_beta <- abs(0 - beta)
+      
+      meanDistToExp <- (distToExp_alpha + distToExp_beta)/2 
+      meanDistToHonest <- (distToHonest_alpha + distToHonest_beta)/2 
+      meanDistToPool <- (distToPool_alpha + distToPool_beta)/2 
+      
+      distToExp_alpha
+      distToHonest_alpha
+      distToPool_alpha
+      
+      equilib<-"none selected yet"
+      
+      #One problem - negative c1 and c2 change expectations.
+      #Pooling 
+      
+      if (alpha >= (1-tolerance)){
+        equilib <- "Pooling"
+      }
+      if (beta <= tolerance){
+        equilib <- "Pooling"
+      }
+      
+      #Honest
+      if (alpha < tolerance & beta > (1-tolerance)){
+        equilib <- "Honest"
+      }
+      
+      if (equilib == "none selected yet"){
+        #This means we are not in zone for hybrid or honest
+        #Meaning we don't need to worry about overlap between hybrid and honest zones
+        if (abs(devAlpha) < tolerance & abs(devBeta) < tolerance){
+          equilib <- "Hybrid Good"
+        } else { #Not honest, not pooling, not Hybrid Good
+          equilib <- "Hybrid Poor"
+        }
+      }
+      
+      #Determine overlap between honest and hybrid zone
+      if (equilib == "Honest"){
+        #Is it closer to honest or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToHonest){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+      #Determine overlap between pooling and hybrid zone
+      if (equilib == "Pooling"){
+        #Is it closer to pooling or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToPool){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+    }
+    
+    row$domSendStrat <- domSendStrat
+    row$domRecStrat <- domRecStrat
+    row$meanSendFit <- meanSendFit
+    row$meanRecFit <- meanRecFit
+    row$devAlpha <- devAlpha
+    row$devBeta <- devBeta
+    row$alpha <- alpha
+    row$beta <- beta
+    row$equilib <- equilib
+    equilibs <- rbind(equilibs,row)
+    
+    i <- i + 6  
   }
+  equilibs$tol <- tol
+  equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
   
-  row$domSendStrat <- domSendStrat
-  row$domRecStrat <- domRecStrat
-  row$meanSendFit <- meanSendFit
-  row$meanRecFit <- meanRecFit
-  row$devAlpha <- devAlpha
-  row$devBeta <- devBeta
-  row$alpha <- alpha
-  row$beta <- beta
-  row$equilib <- equilib
-  equilibs <- rbind(equilibs,row)
-  
-  i <- i + 6  
+  #### saved data ####
+  write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsTolNoSig.csv"), row.names=FALSE)
 }
 
-equilibs$tol <- tol
-equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
-#..
-
-#### saved data ####
-write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsAllHonest.csv"), row.names=FALSE)
-
-#I need to run some more negative c2.
-#And more positive c1
-#I've only done odds with odds and evens with evens. Which I like for readability
-#I can throw out all the 'extra value ones'
-#I will need to write more of a code for this in r probably
-#TO do:
-#c1 = 1.4, 1.6 with c2 0, -.2, -.4, -.6, .2, ... 1.6
-#c2 = -.2, -.4, -.6 with c1 = -.6, ... 1.6
-#Odd high
-#c1 = 1.5 with c2 0, -.1, -.3, -.5 ... 0.1 ... 1.5
-#
-#odd low
-#c2 = -0.1, -.3, -.5 with c1 = -.5, ... 1.5
-#
-#These jobs are running now 135_00-01_...
-
-#### Here HHH plot ####
-unique(equilibs$u)
-#For now - to show Graeme 5/16 tomorrow meeting
-for (i in unique(equilibs$u)){
-  data<-subset(equilibs,(equilibs$c2 >= 0) & u==i)
+#### Plots - not faceted ####
+if (1==2){
+  unique(equilibs$u)
   
-  library(scatterpie)
+  for (i in unique(equilibs$u)){
+    data<-subset(equilibs, u==i)
+    
+    library(scatterpie)
+    
+    #making data for pie chart
+    data$row <- paste0(data$c1,"_",data$c2)
+    
+    pies <- data.frame()
+    for (r in unique(data$row)){
+      dTemp <- subset(data,row==r)
+      sumHybrid <- sum(dTemp$equilib=="Hybrid")
+      sumHonest <- sum(dTemp$equilib=="Honest")
+      sumPooling <- sum(dTemp$equilib=="Pooling")
+      pRow<-data.frame(r)
+      pRow$c1Pie <- unique(dTemp$c1)
+      pRow$c2Pie <- unique(dTemp$c2)
+      pRow$Honest <- sumHonest
+      pRow$Hybrid <- sumHybrid
+      pRow$Pooling <- sumPooling
+      pies <- rbind(pies,pRow)
+    }
+    pies2<-pies[,-1]
+    #For publication? Probably opt for facets instead
+    
+    options(scipen = 999)
+    
+    p<-ggplot(data,aes(c1,c2)) +
+      geom_vline(xintercept=1,linetype="dashed") + 
+      geom_vline(xintercept=0) + 
+      geom_hline(yintercept=1,linetype="dashed") + 
+      geom_hline(yintercept=0) + 
+      geom_abline(intercept = 0, slope = 1, 
+                  linetype="dashed") +
+      geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
+                      cols = colnames(pies2)[3:5],size=0.09) +
+      theme_minimal() +
+      scale_fill_manual(values=c("#49FC3CFC","#0099FF","#F58E8EFC")) +
+      labs(title = paste0("Honest Start",
+                          "\nMut Rate Alpha Beta: ",unique(data$mutRateAlpha),
+                          "\nMut Rate Strategy: ",unique(data$mutRateStrategySender))) +
+      labs(subtitle=paste0("Tolerance: ",tol,"\nMut Rate Strategy")) +
+      
+      p
+    
+    ggsave(paste0(i,"tol_",tol,"NewEquilibs.png"),plot = p,
+           device="png",be="white",path=dir5,height=8,width=9,unit="in")
+  }
+}
+
+#### here ####
+#running the few missing data points now on 149_*...
+
+
+#### Plots - faceted ####
+library(scatterpie)
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/noSig_all"
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  equilibs<-read.csv(paste0(dir5,"/",tol,"_equilibsTolNoSig.csv"))
+  data<-subset(equilibs)
   
   #making data for pie chart
-  data$row <- paste0(data$c1,"_",data$c2)
-  
+  data$row <- paste0(data$c1,"_",data$c2,"_",data$u)
   pies <- data.frame()
   for (r in unique(data$row)){
     dTemp <- subset(data,row==r)
-    sumHybrid <- sum(dTemp$equilib=="Hybrid")
+    sumHybridGood <- sum(dTemp$equilib=="Hybrid Good")
+    sumHybridPoor <- sum(dTemp$equilib=="Hybrid Poor")
     sumHonest <- sum(dTemp$equilib=="Honest")
     sumPooling <- sum(dTemp$equilib=="Pooling")
     pRow<-data.frame(r)
     pRow$c1Pie <- unique(dTemp$c1)
     pRow$c2Pie <- unique(dTemp$c2)
     pRow$Honest <- sumHonest
-    pRow$Hybrid <- sumHybrid
+    pRow$Hybrid_Good <- sumHybridGood
+    pRow$Hybrid_Poor <- sumHybridPoor
     pRow$Pooling <- sumPooling
+    pRow$mutRateAlphaBeta <- unique(dTemp$mutRateAlpha)
+    pRow$mutRateStrat <- unique(dTemp$mutRateStrategySender)
     pies <- rbind(pies,pRow)
   }
   pies2<-pies[,-1]
-  #For publication!
-  #This is for HONEST START. I am running more sims for odd c1 and c2 values to add to this.
+  
+  options(scipen = 999)
+  #### For thesis - facet pie plot ####
+  p<-ggplot(data,aes(c1,c2)) +
+    geom_vline(xintercept=1,linetype="dashed") + 
+    geom_vline(xintercept=0) + 
+    geom_hline(yintercept=1,linetype="dashed") + 
+    geom_hline(yintercept=0) + 
+    geom_abline(intercept = 0, slope = 1, 
+                linetype="dashed") +
+    geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
+                    cols = colnames(pies2)[3:6],size=0.09) +
+    theme_minimal() +
+    scale_fill_manual(values=c("#49FC3CFC","#BD4848FC","#F58E8EFC","#0099FF")) +
+    labs(title="No Signalling Start") +
+    labs(subtitle=paste0("Tolerance: ",tol,"\nMut Rate Strategy")) +
+    labs(fill="Mut Rate\nAlpha Beta\n\nEquilibrium") +
+    facet_grid(mutRateAlphaBeta~mutRateStrat) + 
+    theme(panel.spacing = unit(0, "lines"))
+  p
+  ggsave(paste0(tol,"_allNewEquilibsNoSig_Subset.png"),plot=p,
+         device="png",bg="white",path=dir5,height=8,width=10,unit="in")
+}
+#Sims to look at: Where we get hybrid but shouldn't
+#honest start
+#c2 = c1 and c2 < c1 when both negative for mut ab = 0.01, 0.1 and mut strat = 1e-4
+#And c1=c2 
+
+
+#Exper 5.2 - reverse equilibria, honest start ####
+
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/honest_all"
+
+#first add fix data
+dir5fix <- "D:/StAndrews/SignallingDiscrete/Exper5/Fixes_honest"
+
+endDataFix <-read.csv(paste0(dir5fix,"/_endDataAll5_orderedReduced.csv"))
+endDataAll5<-read.csv(paste0(dir5,"/_endDataAll5_orderedReduced.csv"))
+
+endData5Complete <- rbind(endDataAll5,endDataFix)
+write.csv(endData5Complete,file=paste0(dir5,"/_endDataAll5Complete.csv"), row.names=FALSE)
+endData5Complete <- read.csv(paste0(dir5,"/_endDataAll5Complete.csv")) #to do if I want to repeat this
+
+#Investiage data which should be 'reverse equilbirium'
+#Not finding any 'reverse equilibria' for honest start.
+data<-subset(endData5Complete,c1>1.5&c2<(-0.5))
+head(data)
+ggplot(data,aes(x=paste0(stratType,indType),y=meanStratNum,color=paste(stratType,indType))) + 
+  geom_jitter(height=0,width=0.2,alpha=0.4) +
+  theme_bw() +
+  facet_grid(mutRateAlpha~mutRateStrategySender) +
+  stat_summary(
+    fun = "mean",
+    geom = "point",
+    col = "black",
+    size = 3,
+    shape = 24,
+    fill = "red",
+    aes(x=paste0(stratType,indType),y=meanStratNum) )
+
+ggplot(data,aes(x=paste0(stratType,indType),y=meanAlphaBeta,color=paste(stratType,indType))) + 
+  geom_jitter(height=0,width=0.2,alpha=0.4) +
+  theme_bw() +
+  facet_grid(mutRateAlpha~mutRateStrategySender) +
+  stat_summary(
+    fun = "mean",
+    geom = "point",
+    col = "black",
+    size = 3,
+    shape = 24,
+    fill = "red",
+    aes(x=paste0(stratType,indType),y=meanAlphaBeta) )
+
+
+
+#Exper 5.2 - reverse equilibria, noSig start ####
+#Senders
+#Notes - HOnest: SS3 IS the most common for all but 1 mut rate combination (on average)
+#No sig - about the same though weaker trend. Correlates with mut rate strategy as expected
+#Receivers
+#Same - but onlyfor high mutation rates! WHen mut rate sender is 0.1, ss3 and rs3 are most common with little noise
+#But only just above 50%
+
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/noSig_all"
+
+#first add fix data
+dir5fix <- "D:/StAndrews/SignallingDiscrete/Exper5/Fixes_noSig"
+
+endDataFix <-read.csv(paste0(dir5fix,"/_endDataAll5_orderedReduced.csv"))
+endDataAll5<-read.csv(paste0(dir5,"/_endDataAll5_orderedReduced.csv"))
+
+endData5Complete <- rbind(endDataAll5,endDataFix)
+write.csv(endData5Complete,file=paste0(dir5,"/_endDataAll5NoSigComplete.csv"), row.names=FALSE)
+endData5Complete <- read.csv(paste0(dir5,"/_endDataAll5NoSigComplete.csv")) #to do if I want to repeat this
+
+#Investiage data which should be 'reverse equilbirium'
+#Not finding any 'reverse equilibria' for honest start.
+data<-subset(endData5Complete,c1>1.5&c2<(-0.5))
+head(data)
+ggplot(data,aes(x=paste0(stratType,indType),y=meanStratNum,color=paste(stratType,indType))) + 
+  geom_jitter(height=0,width=0.2,alpha=0.4) +
+  theme_bw() +
+  facet_grid(mutRateAlpha~mutRateStrategySender) +
+  stat_summary(
+    fun = "mean",
+    geom = "point",
+    col = "black",
+    size = 3,
+    shape = 24,
+    fill = "red",
+    aes(x=paste0(stratType,indType),y=meanStratNum) )
+
+ggplot(data,aes(x=paste0(stratType,indType),y=meanAlphaBeta,color=paste(stratType,indType))) + 
+  geom_jitter(height=0,width=0.2,alpha=0.4) +
+  theme_bw() +
+  facet_grid(mutRateAlpha~mutRateStrategySender) +
+  stat_summary(
+    fun = "mean",
+    geom = "point",
+    col = "black",
+    size = 3,
+    shape = 24,
+    fill = "red",
+    aes(x=paste0(stratType,indType),y=meanAlphaBeta) )
+
+
+#### Here ####
+
+
+#This is all the data - fixes and original
+#choose honest start or no sig
+#honest
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/honest_all"
+endData5Complete <- read.csv(paste0(dir5,"/_endDataAll5Complete.csv")) #to do if I want to repeat this
+
+#no sig
+dir5 <- "D:/StAndrews/SignallingDiscrete/Exper5/noSig_all"
+endData5Complete <- read.csv(paste0(dir5,"/_endDataAll5NoSigComplete.csv")) #to do if I want to repeat this
+
+
+
+endDataAll5OrderedReduced <- endData5Complete
+
+equilibsAll<-data.frame()
+#### Determine Equilibs ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #add tol to equilib file name
+  tolerance <- tol
+  toleranceStrategy <- tol #can be changed
+  
+  unique(endDataAll5OrderedReduced$c1)
+  dAll <- endDataAll5OrderedReduced
+  head(dAll)
+  dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
+  equilibs <- data.frame()
+  
+  #inspecting data here
+  #dAll$mutRateAlpha
+  #subset(dAll, c1 < 0 & c2 < 0 & c2 == c1 & mutRateStrategySender == 0.0001 & mutRateAlpha == 0.1)
+  
+  i <- 1
+  while (i <= nrow(dAll)){
+    
+    #determine dominant sender and receiver strat
+    row <- dAll[i,]
+    #determine expected dominant strategies
+    
+    #senders
+    s<-dAll[i:(i+2),]
+    #dominant sender strat
+    domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType[1]
+    devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)[1]
+    expAlpha <- unique(s$expAlphaBeta)[1]
+    alpha <- unique(s$meanAlphaBeta)[1]
+    meanSendFit <- sum(s$meanFit * s$meanStratFreq)
+    #Also find out out the strategy deviation?
+    #receivers
+    r<-dAll[(i+3):(i+5),]
+    
+    domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType[1]
+    devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)[1]
+    expBeta <- unique(r$expAlphaBeta)[1]
+    beta <- unique(r$meanAlphaBeta)[1]
+    meanRecFit <- sum(r$meanFit * r$meanStratFreq)
+    
+    #Correcting tolerance for mutation pressure
+    tolerance <- tol + ( ( (s[1,]$mutRateAlpha*s[1,]$mutStepAlpha) +
+                             (r[1,]$mutRateBeta*r[1,]$mutStepBeta)
+    ) / 2 )
+    
+    equilib<-"none selected yet"
+    
+    stratsOkay <- FALSE
+    
+    #For reverse equilibrium
+    if (s[3,]$meanStratFreq > 1-(toleranceStrategy + s[3,]$mutRateStrategySender) & 
+        r[3,]$meanStratFreq > 1-(toleranceStrategy + r[3,]$mutRateStrategyReceiver)){
+      equilib <- "Reverse Strong"
+    }
+    
+    if (domSendStrat=="strat3" & domRecStrat=="strat3"){
+      equilib <- "Reverse Weak"
+    }
+    
+    #For non-pooling:
+    if (s[1,]$meanStratFreq > 1-(toleranceStrategy + s[1,]$mutRateStrategySender) & 
+        r[1,]$meanStratFreq > 1-(toleranceStrategy + r[1,]$mutRateStrategyReceiver)){
+      stratsOkay <- TRUE
+    }
+    if (stratsOkay == FALSE){
+      if (equilib == "none selected yet"){
+        equilib <- "Pooling"
+      }
+    } else {  #strats okay
+      #Rewriting equilibrium definitions
+      
+      distToExp_alpha <- abs(expAlpha - alpha)
+      distToHonest_alpha <- abs(0 - alpha)
+      distToPool_alpha <- abs(1 - alpha)
+      
+      distToExp_beta <- abs(expBeta - beta)
+      distToHonest_beta <- abs(1 - beta)
+      distToPool_beta <- abs(0 - beta)
+      
+      meanDistToExp <- (distToExp_alpha + distToExp_beta)/2 
+      meanDistToHonest <- (distToHonest_alpha + distToHonest_beta)/2 
+      meanDistToPool <- (distToPool_alpha + distToPool_beta)/2 
+      
+      distToExp_alpha
+      distToHonest_alpha
+      distToPool_alpha
+      
+      equilib<-"none selected yet"
+      
+      #One problem - negative c1 and c2 change expectations.
+      #Pooling 
+      
+      if (alpha >= (1-tolerance)){
+        equilib <- "Pooling"
+      }
+      if (beta <= tolerance){
+        equilib <- "Pooling"
+      }
+      
+      #Honest
+      if (alpha < tolerance & beta > (1-tolerance)){
+        equilib <- "Honest"
+      }
+      
+      if (equilib == "none selected yet"){
+        #This means we are not in zone for hybrid or honest
+        #Meaning we don't need to worry about overlap between hybrid and honest zones
+        if (abs(devAlpha) < tolerance & abs(devBeta) < tolerance){
+          equilib <- "Hybrid Good"
+        } else { #Not honest, not pooling, not Hybrid Good
+          equilib <- "Hybrid Poor"
+        }
+      }
+      
+      #Determine overlap between honest and hybrid zone
+      if (equilib == "Honest"){
+        #Is it closer to honest or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToHonest){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+      #Determine overlap between pooling and hybrid zone
+      if (equilib == "Pooling"){
+        #Is it closer to pooling or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToPool){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+    }
+    
+    row$domSendStrat <- domSendStrat
+    row$domRecStrat <- domRecStrat
+    row$meanSendFit <- meanSendFit
+    row$meanRecFit <- meanRecFit
+    row$devAlpha <- devAlpha
+    row$devBeta <- devBeta
+    row$alpha <- alpha
+    row$beta <- beta
+    row$equilib <- equilib
+    equilibs <- rbind(equilibs,row)
+    
+    i <- i + 6  
+  }
+  equilibs$tol <- tol
+  equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
+  
+  #### saved data ####
+  #write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsTolHonest_Reverse.csv"), row.names=FALSE)
+  write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsTolNoSig_Reverse.csv"), row.names=FALSE)
+}
+
+#### Plots - faceted ####
+library(scatterpie)
+
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #equilibs<-read.csv(paste0(dir5,"/",tol,"_equilibsTolHonest_Reverse.csv"))
+  equilibs<-read.csv(paste0(dir5,"/",tol,"_equilibsTolNoSig_Reverse.csv"))
+  equilibs$equilib<-gsub("Reverse Weak","Reverse Poor",equilibs$equilib)
+  data<-subset(equilibs)
+  #making data for pie chart
+  data$row <- paste0(data$c1,"_",data$c2,"_",data$u)
+  pies <- data.frame()
+  for (r in unique(data$row)){
+    dTemp <- subset(data,row==r)
+    sumHybridGood <- sum(dTemp$equilib=="Hybrid Good")
+    sumHybridPoor <- sum(dTemp$equilib=="Hybrid Poor")
+    sumHonest <- sum(dTemp$equilib=="Honest")
+    sumPooling <- sum(dTemp$equilib=="Pooling")
+    pRow<-data.frame(r)
+    pRow$c1Pie <- unique(dTemp$c1)
+    pRow$c2Pie <- unique(dTemp$c2)
+    pRow$Honest <- sumHonest
+    pRow$Hybrid_Good <- sumHybridGood
+    pRow$Hybrid_Poor <- sumHybridPoor
+    pRow$Pooling <- sumPooling
+    sumReversePoor <- sum(dTemp$equilib=="Reverse Poor")
+    sumReverseGood <- sum(dTemp$equilib=="Reverse Strong")
+    pRow$Reverse_Poor <- sumReversePoor
+    pRow$Reverse_Good <- sumReverseGood
+    pRow$mutRateAlphaBeta <- unique(dTemp$mutRateAlpha)
+    pRow$mutRateStrat <- unique(dTemp$mutRateStrategySender)
+    pies <- rbind(pies,pRow)
+  }
+  head(pies)
+  pies2<-pies[,-1]
+  
+  options(scipen = 999)
+  #### For thesis - facet pie plot ####
+  p<-ggplot(data,aes(c1,c2)) +
+    geom_vline(xintercept=1,linetype="dotted") + 
+    geom_vline(xintercept=0) + 
+    geom_hline(yintercept=1,linetype="dotted") + 
+    geom_hline(yintercept=0) + 
+    geom_abline(intercept = 0, slope = 1, 
+                linetype="dotted") +
+    geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
+                    cols = colnames(pies2)[3:7],size=0.09,pie_scale=1.2) + #old size 0.09
+    theme_minimal() +
+    scale_fill_manual(values=c("#49FC3CFC","#BD4848FC","#F58E8EFC","#3473C7","#9FC3F2")) +
+    #labs(title="Honest Start") +
+    labs(title="No Signal Start") +
+    labs(subtitle=paste0("Tolerance: ",tol,"\nMut Rate Strategy")) +
+    labs(fill="Mut Rate\nAlpha Beta\n\nEquilibrium") +
+    facet_grid(mutRateAlphaBeta~mutRateStrat) + 
+    theme(panel.spacing = unit(0, "lines"))
+  #Old blue I used: #0099FF
+  
+  ggsave(paste0(tol,"_allNewEquilibs_Reverse.png"),plot=p,
+         device="png",bg="white",path=dir5,height=9,width=11.25,unit="in") #width was 10 for non subset
+  
+}
+
+#Exper 6 - m variable, no signalling start ####
+dir6 <- "D:/StAndrews/SignallingDiscrete/Exper6/all"
+summaryFiles6 <- list.files(dir6,"*summaryStats*")
+#First - create endData stats from summaryStats files produced by cpp
+cutoff <- 0.25   #Look at last this % of generations
+iterator <- 1
+endDataAll6<-data.frame()
+
+for (i in summaryFiles6){
+  
+  dataAllReps <- read.csv(paste0(dir6,"/",i))
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    
+    data$fileName <- i
+    dataEnd <- subset(data,gen>=((max(gen)-(cutoff*max(gen)))))
+    dataEnd$concatStrat <- paste0(dataEnd$indType,"_",dataEnd$stratType)
+    
+    dataEndSenders <- subset(dataEnd,indType == "Sender")
+    meanAlpha <- mean(dataEndSenders$meanAlphaBeta)
+    dataEndReceivers <- subset(dataEnd,indType == "Receiver")
+    meanBeta <- mean(dataEndReceivers$meanAlphaBeta)
+    
+    #remove NA from mean fit - it messes things up later... Just make 0s
+    dataEnd$meanFit <- replace(dataEnd$meanFit, dataEnd$meanFit == "NaN", 0)
+    
+    
+    row <- data.frame()
+    for (j in unique(dataEnd$concatStrat)){
+      temp <- subset(dataEnd,concatStrat == j)
+      row <- temp[1,]
+      if (row$indType == "Receiver"){
+        row$meanAlphaBeta <- meanBeta
+      } else {
+        row$meanAlphaBeta <- meanAlpha
+      }
+      
+      
+      row$fileSuffix <- gsub("_[0-9]","",gsub("_*..csv","",gsub(".*summaryStats_","",row$fileName)))
+      row$meanFit <- mean(temp$meanFit)
+      row$meanStratNum <- mean(temp$stratNum)
+      row$meanStratFreq <- mean(temp$stratNum/row$N)
+      row$stratNum <- "NA"
+      row$gen <- "NA"
+      row$fileNum <- iterator
+      
+      endDataAll6 <- rbind(endDataAll6,row)
+      
+    }
+    iterator <- iterator + 1
+  }
+}
+#..do we have all c1 and c2 values here? Check val of iterator
+if (1==2){
+  #Organize parameters for all simulations
+  masterParams <- list()
+  variableParams <- c()
+  paramNames <- c()
+  for (c in which(colnames(endDataAll6) == "N"):which(colnames(endDataAll6) == "fileSuffix")){
+    masterParams[[c+1-which(colnames(endDataAll6) == "N")]] <- unique(endDataAll6[,c])
+    paramNames <- c(paramNames,colnames(endDataAll6)[c])
+    if(length(unique(endDataAll6[,c])) > 1 ){
+      variableParams<- c(variableParams,colnames(endDataAll6)[c])
+    }
+  }
+  names(masterParams) <- paramNames
+  N <- as.numeric(masterParams$N)
+  ###
+  print(variableParams)
+  masterParams
+}
+
+endDataAll6$c1c2 <- paste0(endDataAll6$c1,"_",endDataAll6$c2)
+endDataAll6$lab <- paste0(endDataAll6$c1,
+                          "_",endDataAll6$m,
+                          "_",endDataAll6$initializationType,
+                          "_",endDataAll6$cauchyDist,
+                          "_",endDataAll6$mutRateAlpha,
+                          "_",endDataAll6$mutRateStrategySender,
+                          "_",endDataAll6$c2
+)
+write.csv(endDataAll6,file=paste0(dir6,"/_endDataAll6.csv"), row.names=FALSE)
+
+#here..# !!
+
+endDataAll6OrderedReduced <- endDataAll6
+
+head(endDataAll6OrderedReduced)
+for (i in 1:nrow(endDataAll6OrderedReduced)){
+  if (endDataAll6OrderedReduced[i,]$c2<=endDataAll6OrderedReduced[i,]$c1){
+    if (endDataAll6OrderedReduced[i,]$indType=="Sender"){
+      endDataAll6OrderedReduced[i,]$expAlphaBeta <- 1
+    } else {
+      endDataAll6OrderedReduced[i,]$expAlphaBeta <- 0
+    }
+  }
+  else if (endDataAll6OrderedReduced[i,]$c2>=1 & endDataAll6OrderedReduced[i,]$c1 < 1){
+    if (endDataAll6OrderedReduced[i,]$indType=="Sender"){
+      endDataAll6OrderedReduced[i,]$expAlphaBeta <- 0
+    } else {
+      endDataAll6OrderedReduced[i,]$expAlphaBeta <- 1
+    }
+  }
+}
+
+#..check
+sort(unique(endDataAll6OrderedReduced$c1))
+
+write.csv(endDataAll6OrderedReduced,file=paste0(dir6,"/_endDataAll6_orderedReduced.csv"), row.names=FALSE)
+
+
+endDataAll6OrderedReduced <- read.csv(paste0(dir6,"/_endDataAll6_orderedReduced.csv"))
+
+equilibsAll<-data.frame()
+#### Determine Equilibs ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #add tol to equilib file name
+  tolerance <- tol
+  toleranceStrategy <- tol #can be changed
+  
+  unique(endDataAll6OrderedReduced$c1)
+  dAll <- endDataAll6OrderedReduced
+  head(dAll)
+  dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
+  equilibs <- data.frame()
+  
+  #inspecting data here
+  #dAll$mutRateAlpha
+  #subset(dAll, c1 < 0 & c2 < 0 & c2 == c1 & mutRateStrategySender == 0.0001 & mutRateAlpha == 0.1)
+  
+  i <- 1
+  while (i <= nrow(dAll)){
+    
+    #determine dominant sender and receiver strat
+    row <- dAll[i,]
+    #determine expected dominant strategies
+    
+    #senders
+    s<-dAll[i:(i+2),]
+    #dominant sender strat
+    domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType[1]
+    devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)[1]
+    expAlpha <- unique(s$expAlphaBeta)[1]
+    alpha <- unique(s$meanAlphaBeta)[1]
+    meanSendFit <- sum(s$meanFit * s$meanStratFreq)
+    #Also find out out the strategy deviation?
+    #receivers
+    r<-dAll[(i+3):(i+5),]
+    
+    domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType[1]
+    devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)[1]
+    expBeta <- unique(r$expAlphaBeta)[1]
+    beta <- unique(r$meanAlphaBeta)[1]
+    meanRecFit <- sum(r$meanFit * r$meanStratFreq)
+    
+    #Correcting tolerance for mutation pressure
+    tolerance <- tol + ( ( (s[1,]$mutRateAlpha*s[1,]$mutStepAlpha) +
+                             (r[1,]$mutRateBeta*r[1,]$mutStepBeta)
+    ) / 2 )
+    
+    stratsOkay <- FALSE
+    #For non-pooling:
+    if (s[1,]$meanStratFreq > 1-(toleranceStrategy + s[1,]$mutRateStrategySender) & 
+        r[1,]$meanStratFreq > 1-(toleranceStrategy + r[1,]$mutRateStrategyReceiver)){
+      stratsOkay <- TRUE
+    }
+    if (stratsOkay == FALSE){
+      equilib <- "Pooling"
+    } else {  #strats okay
+      #Rewriting equilibrium definitions
+      
+      distToExp_alpha <- abs(expAlpha - alpha)
+      distToHonest_alpha <- abs(0 - alpha)
+      distToPool_alpha <- abs(1 - alpha)
+      
+      distToExp_beta <- abs(expBeta - beta)
+      distToHonest_beta <- abs(1 - beta)
+      distToPool_beta <- abs(0 - beta)
+      
+      meanDistToExp <- (distToExp_alpha + distToExp_beta)/2 
+      meanDistToHonest <- (distToHonest_alpha + distToHonest_beta)/2 
+      meanDistToPool <- (distToPool_alpha + distToPool_beta)/2 
+      
+      distToExp_alpha
+      distToHonest_alpha
+      distToPool_alpha
+      
+      equilib<-"none selected yet"
+      
+      #One problem - negative c1 and c2 change expectations.
+      #Pooling 
+      
+      if (alpha >= (1-tolerance)){
+        equilib <- "Pooling"
+      }
+      if (beta <= tolerance){
+        equilib <- "Pooling"
+      }
+      
+      #Honest
+      if (alpha < tolerance & beta > (1-tolerance)){
+        equilib <- "Honest"
+      }
+      
+      if (equilib == "none selected yet"){
+        #This means we are not in zone for hybrid or honest
+        #Meaning we don't need to worry about overlap between hybrid and honest zones
+        if (abs(devAlpha) < tolerance & abs(devBeta) < tolerance){
+          equilib <- "Hybrid Good"
+        } else { #Not honest, not pooling, not Hybrid Good
+          equilib <- "Hybrid Poor"
+        }
+      }
+      
+      #Determine overlap between honest and hybrid zone
+      if (equilib == "Honest"){
+        #Is it closer to honest or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToHonest){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+      #Determine overlap between pooling and hybrid zone
+      if (equilib == "Pooling"){
+        #Is it closer to pooling or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToPool){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+    }
+    
+    row$domSendStrat <- domSendStrat
+    row$domRecStrat <- domRecStrat
+    row$meanSendFit <- meanSendFit
+    row$meanRecFit <- meanRecFit
+    row$devAlpha <- devAlpha
+    row$devBeta <- devBeta
+    row$alpha <- alpha
+    row$beta <- beta
+    row$equilib <- equilib
+    equilibs <- rbind(equilibs,row)
+    
+    i <- i + 6  
+  }
+  equilibs$tol <- tol
+  equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
+  
+  #### saved data ####
+  write.csv(equilibs,file=paste0(dir6,"/",tol,"_equilibsTolNoSig.csv"), row.names=FALSE)
+}
+
+#### Plots - faceted ####
+library(scatterpie)
+tol<-0.05
+#### For thesis - facet pie plot ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  equilibs<-read.csv(paste0(dir6,"/",tol,"_equilibsTolNoSig.csv"))
+  data<-subset(equilibs)
+  
+  #making data for pie chart
+  data$row <- paste0(data$c1,"_",data$c2,"_",data$m)
+  pies <- data.frame()
+  for (r in unique(data$row)){
+    dTemp <- subset(data,row==r)
+    sumHybridGood <- sum(dTemp$equilib=="Hybrid Good")
+    sumHybridPoor <- sum(dTemp$equilib=="Hybrid Poor")
+    sumHonest <- sum(dTemp$equilib=="Honest")
+    sumPooling <- sum(dTemp$equilib=="Pooling")
+    pRow<-data.frame(r)
+    pRow$c1Pie <- unique(dTemp$c1)
+    pRow$c2Pie <- unique(dTemp$c2)
+    pRow$Honest <- sumHonest
+    pRow$Hybrid_Good <- sumHybridGood
+    pRow$Hybrid_Poor <- sumHybridPoor
+    pRow$Pooling <- sumPooling
+    pRow$m <- unique(dTemp$m)
+    pies <- rbind(pies,pRow)
+  }
+  pies2<-pies[,-1]
+  options(scipen = 999)
   
   p<-ggplot(data,aes(c1,c2)) +
     geom_vline(xintercept=1,linetype="dashed") + 
@@ -2584,61 +3922,874 @@ for (i in unique(equilibs$u)){
     geom_abline(intercept = 0, slope = 1, 
                 linetype="dashed") +
     geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
-                    cols = colnames(pies2)[3:5]) +
-    scale_fill_brewer(palette="Set1") +
-    theme_bw() +
-    labs(title = paste0(
-      "Mut Rate Alpha Beta: ",unique(data$mutRateAlpha),
-      "\nMut Rate Strategy: ",unique(data$mutRateStrategySender)
-    ))
-  
-  ggsave(paste0(i,".png"),plot = p,
-         device="png",path=dir5,height=8,width=10,unit="in")
-  
-  
+                    cols = colnames(pies2)[3:6],size=0.09) +
+    theme_minimal() +
+    scale_fill_manual(values=c("#49FC3CFC","#BD4848FC","#F58E8EFC","#0099FF")) +
+    labs(title="Honest Start") +
+    labs(subtitle=paste0("Tolerance: ",tol,"\nm")) +
+    labs(fill="Equilibrium") +
+    facet_wrap(~m) +
+    theme(panel.spacing = unit(0, "lines"))
+  p
+  ggsave(paste0(tol,"_allNewEquilibsNoSig_Subset.png"),plot=p,
+         device="png",bg="white",path=dir6,height=8,width=9.5,unit="in")
 }
 
-#for (i in unique(equilibs$u))
-data<-subset(equilibs,(equilibs$c2 >= 0))
 
+#Exper 6 Reverse - m ####
+
+dir6 <- "D:/StAndrews/SignallingDiscrete/Exper6/all"
+summaryFiles6 <- list.files(dir6,"*summaryStats*")
+
+endDataAll6OrderedReduced <- read.csv(paste0(dir6,"/_endDataAll6_orderedReduced.csv"))
+
+equilibsAll<-data.frame()
+#### Determine Equilibs ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #add tol to equilib file name
+  tolerance <- tol
+  toleranceStrategy <- tol #can be changed
+  
+  unique(endDataAll6OrderedReduced$c1)
+  dAll <- endDataAll6OrderedReduced
+  head(dAll)
+  dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
+  equilibs <- data.frame()
+  
+  #inspecting data here
+  #dAll$mutRateAlpha
+  #subset(dAll, c1 < 0 & c2 < 0 & c2 == c1 & mutRateStrategySender == 0.0001 & mutRateAlpha == 0.1)
+  
+  i <- 1
+  while (i <= nrow(dAll)){
+    
+    #determine dominant sender and receiver strat
+    row <- dAll[i,]
+    #determine expected dominant strategies
+    
+    #senders
+    s<-dAll[i:(i+2),]
+    #dominant sender strat
+    domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType[1]
+    devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)[1]
+    expAlpha <- unique(s$expAlphaBeta)[1]
+    alpha <- unique(s$meanAlphaBeta)[1]
+    meanSendFit <- sum(s$meanFit * s$meanStratFreq)
+    #Also find out out the strategy deviation?
+    #receivers
+    r<-dAll[(i+3):(i+5),]
+    
+    domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType[1]
+    devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)[1]
+    expBeta <- unique(r$expAlphaBeta)[1]
+    beta <- unique(r$meanAlphaBeta)[1]
+    meanRecFit <- sum(r$meanFit * r$meanStratFreq)
+    
+    #Correcting tolerance for mutation pressure
+    tolerance <- tol + ( ( (s[1,]$mutRateAlpha*s[1,]$mutStepAlpha) +
+                             (r[1,]$mutRateBeta*r[1,]$mutStepBeta)
+    ) / 2 )
+    
+    equilib<-"none selected yet"
+    
+    stratsOkay <- FALSE
+    
+    #For reverse equilibrium
+    if (s[3,]$meanStratFreq > 1-(toleranceStrategy + s[3,]$mutRateStrategySender) & 
+        r[3,]$meanStratFreq > 1-(toleranceStrategy + r[3,]$mutRateStrategyReceiver)){
+      equilib <- "Reverse Strong"
+    }
+    
+    if (domSendStrat=="strat3" & domRecStrat=="strat3"){
+      equilib <- "Reverse Weak"
+    }
+    
+    #For non-pooling:
+    if (s[1,]$meanStratFreq > 1-(toleranceStrategy + s[1,]$mutRateStrategySender) & 
+        r[1,]$meanStratFreq > 1-(toleranceStrategy + r[1,]$mutRateStrategyReceiver)){
+      stratsOkay <- TRUE
+    }
+    if (stratsOkay == FALSE){
+      if (equilib == "none selected yet"){
+        equilib <- "Pooling"
+      }
+    } else {  #strats okay
+      #Rewriting equilibrium definitions
+      
+      distToExp_alpha <- abs(expAlpha - alpha)
+      distToHonest_alpha <- abs(0 - alpha)
+      distToPool_alpha <- abs(1 - alpha)
+      
+      distToExp_beta <- abs(expBeta - beta)
+      distToHonest_beta <- abs(1 - beta)
+      distToPool_beta <- abs(0 - beta)
+      
+      meanDistToExp <- (distToExp_alpha + distToExp_beta)/2 
+      meanDistToHonest <- (distToHonest_alpha + distToHonest_beta)/2 
+      meanDistToPool <- (distToPool_alpha + distToPool_beta)/2 
+      
+      distToExp_alpha
+      distToHonest_alpha
+      distToPool_alpha
+      
+      equilib<-"none selected yet"
+      
+      #One problem - negative c1 and c2 change expectations.
+      #Pooling 
+      
+      if (alpha >= (1-tolerance)){
+        equilib <- "Pooling"
+      }
+      if (beta <= tolerance){
+        equilib <- "Pooling"
+      }
+      
+      #Honest
+      if (alpha < tolerance & beta > (1-tolerance)){
+        equilib <- "Honest"
+      }
+      
+      if (equilib == "none selected yet"){
+        #This means we are not in zone for hybrid or honest
+        #Meaning we don't need to worry about overlap between hybrid and honest zones
+        if (abs(devAlpha) < tolerance & abs(devBeta) < tolerance){
+          equilib <- "Hybrid Good"
+        } else { #Not honest, not pooling, not Hybrid Good
+          equilib <- "Hybrid Poor"
+        }
+      }
+      
+      #Determine overlap between honest and hybrid zone
+      if (equilib == "Honest"){
+        #Is it closer to honest or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToHonest){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+      #Determine overlap between pooling and hybrid zone
+      if (equilib == "Pooling"){
+        #Is it closer to pooling or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToPool){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+    }
+    
+    row$domSendStrat <- domSendStrat
+    row$domRecStrat <- domRecStrat
+    row$meanSendFit <- meanSendFit
+    row$meanRecFit <- meanRecFit
+    row$devAlpha <- devAlpha
+    row$devBeta <- devBeta
+    row$alpha <- alpha
+    row$beta <- beta
+    row$equilib <- equilib
+    equilibs <- rbind(equilibs,row)
+    
+    i <- i + 6  
+  }
+  equilibs$tol <- tol
+  equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
+  
+  #### saved data ####
+  #write.csv(equilibs,file=paste0(dir5,"/",tol,"_equilibsTolHonest_Reverse.csv"), row.names=FALSE)
+  write.csv(equilibs,file=paste0(dir6,"/",tol,"_equilibs_m_Reverse.csv"), row.names=FALSE)
+}
+
+unique(equilibs$equilib)
+
+
+#### Facet pie plots ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  equilibs<-read.csv(paste0(dir6,"/",tol,"_equilibs_m_Reverse.csv"))
+  data<-subset(equilibs, c1 >= -0.6 & c1 <= 1.6 & c2 <= 1.7 & c2 >= - 0.6)
+  
+  #making data for pie chart
+  data$row <- paste0(data$c1,"_",data$c2,"_",data$m)
+  pies <- data.frame()
+  for (r in unique(data$row)){
+    dTemp <- subset(data,row==r)
+    sumHybridGood <- sum(dTemp$equilib=="Hybrid Good")
+    sumHybridPoor <- sum(dTemp$equilib=="Hybrid Poor")
+    sumHonest <- sum(dTemp$equilib=="Honest")
+    sumPooling <- sum(dTemp$equilib=="Pooling")
+    pRow<-data.frame(r)
+    pRow$c1Pie <- unique(dTemp$c1)
+    pRow$c2Pie <- unique(dTemp$c2)
+    pRow$Honest <- sumHonest
+    pRow$Hybrid_Good <- sumHybridGood
+    pRow$Hybrid_Poor <- sumHybridPoor
+    pRow$Pooling <- sumPooling
+    sumReversePoor <- sum(dTemp$equilib=="Reverse Weak")
+    sumReverseGood <- sum(dTemp$equilib=="Reverse Strong")
+    pRow$Reverse_Poor <- sumReversePoor
+    pRow$Reverse_Good <- sumReverseGood
+    pRow$m <- unique(dTemp$m)
+    pies <- rbind(pies,pRow)
+  }
+  pies2<-pies[,-1]
+  options(scipen = 999)
+  
+  p<-ggplot(data,aes(c1,c2)) +
+    geom_vline(xintercept=1,linetype="dashed") + 
+    geom_vline(xintercept=0) + 
+    geom_hline(yintercept=1,linetype="dashed") + 
+    geom_hline(yintercept=0) + 
+    geom_abline(intercept = 0, slope = 1, 
+                linetype="dashed") +
+    geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
+                    cols = colnames(pies2)[3:7],size=0.09,pie_scale=1.2) +
+    theme_minimal() +
+    scale_fill_manual(values=c("#49FC3CFC","#BD4848FC","#F58E8EFC","#3473C7","#9FC3F2")) +
+    labs(title="Honest Start") +
+    labs(subtitle=paste0("Tolerance: ",tol,"\nm")) +
+    labs(fill="Equilibrium") +
+    facet_wrap(~m) +
+    theme(panel.spacing = unit(0, "lines"))
+  
+  ggsave(paste0(tol,"_equilibs_Reverse.png"),plot=p,
+         device="png",bg="white",path=dir6,height=5.5*1.3,width=8.5*1.3,unit="in")
+}
+
+
+#Exper 7 - longer run time for noSIg start ####
+dir7 <- "D:/StAndrews/SignallingDiscrete/Exper7"
+summaryFiles7 <- list.files(dir7,"*summaryStats*")
+#First - create endData stats from summaryStats files produced by cpp
+cutoff <- 0.25   #Look at last this % of generations
+iterator <- 1
+endDataAll7<-data.frame()
+
+for (i in summaryFiles7){
+  
+  dataAllReps <- read.csv(paste0(dir7,"/",i))
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    
+    data$fileName <- i
+    dataEnd <- subset(data,gen>=((max(gen)-(cutoff*max(gen)))))
+    dataEnd$concatStrat <- paste0(dataEnd$indType,"_",dataEnd$stratType)
+    
+    dataEndSenders <- subset(dataEnd,indType == "Sender")
+    meanAlpha <- mean(dataEndSenders$meanAlphaBeta)
+    dataEndReceivers <- subset(dataEnd,indType == "Receiver")
+    meanBeta <- mean(dataEndReceivers$meanAlphaBeta)
+    
+    #remove NA from mean fit - it messes things up later... Just make 0s
+    dataEnd$meanFit <- replace(dataEnd$meanFit, dataEnd$meanFit == "NaN", 0)
+    
+    
+    row <- data.frame()
+    for (j in unique(dataEnd$concatStrat)){
+      temp <- subset(dataEnd,concatStrat == j)
+      row <- temp[1,]
+      if (row$indType == "Receiver"){
+        row$meanAlphaBeta <- meanBeta
+      } else {
+        row$meanAlphaBeta <- meanAlpha
+      }
+      
+      
+      row$fileSuffix <- gsub("_[0-9]","",gsub("_*..csv","",gsub(".*summaryStats_","",row$fileName)))
+      row$meanFit <- mean(temp$meanFit)
+      row$meanStratNum <- mean(temp$stratNum)
+      row$meanStratFreq <- mean(temp$stratNum/row$N)
+      row$stratNum <- "NA"
+      row$gen <- "NA"
+      row$fileNum <- iterator
+      
+      endDataAll7 <- rbind(endDataAll7,row)
+      
+    }
+    iterator <- iterator + 1
+  }
+}
+#..do we have all c1 and c2 values here? Check val of iterator
+if (1==1){
+  #Organize parameters for all simulations
+  masterParams <- list()
+  variableParams <- c()
+  paramNames <- c()
+  for (c in which(colnames(endDataAll7) == "N"):which(colnames(endDataAll7) == "fileSuffix")){
+    masterParams[[c+1-which(colnames(endDataAll7) == "N")]] <- unique(endDataAll7[,c])
+    paramNames <- c(paramNames,colnames(endDataAll7)[c])
+    if(length(unique(endDataAll7[,c])) > 1 ){
+      variableParams<- c(variableParams,colnames(endDataAll7)[c])
+    }
+  }
+  names(masterParams) <- paramNames
+  N <- as.numeric(masterParams$N)
+  ###
+  print(variableParams)
+  masterParams
+}
+
+endDataAll7$c1c2 <- paste0(endDataAll7$c1,"_",endDataAll7$c2)
+endDataAll7$lab <- paste0(endDataAll7$c1,
+                          "_",endDataAll7$m,
+                          "_",endDataAll7$initializationType,
+                          "_",endDataAll7$cauchyDist,
+                          "_",endDataAll7$mutRateAlpha,
+                          "_",endDataAll7$mutRateStrategySender,
+                          "_",endDataAll7$c2
+)
+write.csv(endDataAll7,file=paste0(dir7,"/_endDataAll7.csv"), row.names=FALSE)
+
+#here..# !!
+
+endDataAll7OrderedReduced <- endDataAll7
+
+head(endDataAll7OrderedReduced)
+for (i in 1:nrow(endDataAll7OrderedReduced)){
+  if (endDataAll7OrderedReduced[i,]$c2<=endDataAll7OrderedReduced[i,]$c1){
+    if (endDataAll7OrderedReduced[i,]$indType=="Sender"){
+      endDataAll7OrderedReduced[i,]$expAlphaBeta <- 1
+    } else {
+      endDataAll7OrderedReduced[i,]$expAlphaBeta <- 0
+    }
+  }
+  else if (endDataAll7OrderedReduced[i,]$c2>=1 & endDataAll7OrderedReduced[i,]$c1 < 1){
+    if (endDataAll7OrderedReduced[i,]$indType=="Sender"){
+      endDataAll7OrderedReduced[i,]$expAlphaBeta <- 0
+    } else {
+      endDataAll7OrderedReduced[i,]$expAlphaBeta <- 1
+    }
+  }
+}
+
+#..check
+sort(unique(endDataAll7OrderedReduced$c1))
+
+write.csv(endDataAll7OrderedReduced,file=paste0(dir7,"/_endDataAll7_orderedReduced.csv"), row.names=FALSE)
+endDataAll7OrderedReduced <- read.csv(paste0(dir7,"/_endDataAll7_orderedReduced.csv"))
+
+unique(endDataAll7OrderedReduced$mutRateAlpha)
+unique(endDataAll7OrderedReduced$mutRateStrategyReceiver)
+
+unique(endDataAll7OrderedReduced$mutStepAlpha)
+unique(endDataAll7OrderedReduced$N)
+
+unique(endDataAll7OrderedReduced$m)
+head(endDataAll7OrderedReduced)
+
+equilibsAll<-data.frame()
+#### Determine Equilibs ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  #add tol to equilib file name
+  tolerance <- tol
+  toleranceStrategy <- tol #can be changed
+  
+  unique(endDataAll7OrderedReduced$c1)
+  dAll <- endDataAll7OrderedReduced
+  head(dAll)
+  dAll$devAlphaBeta <- dAll$meanAlphaBeta-dAll$expAlphaBeta
+  equilibs <- data.frame()
+  
+  #inspecting data here
+  #dAll$mutRateAlpha
+  #subset(dAll, c1 < 0 & c2 < 0 & c2 == c1 & mutRateStrategySender == 0.0001 & mutRateAlpha == 0.1)
+  
+  i <- 1
+  while (i <= nrow(dAll)){
+    
+    #determine dominant sender and receiver strat
+    row <- dAll[i,]
+    #determine expected dominant strategies
+    
+    #senders
+    s<-dAll[i:(i+2),]
+    #dominant sender strat
+    domSendStrat <- s[which(s$meanStratNum==max(s$meanStratNum)),]$stratType[1]
+    devAlpha <- unique(s$meanAlphaBeta - s$expAlphaBeta)[1]
+    expAlpha <- unique(s$expAlphaBeta)[1]
+    alpha <- unique(s$meanAlphaBeta)[1]
+    meanSendFit <- sum(s$meanFit * s$meanStratFreq)
+    #Also find out out the strategy deviation?
+    #receivers
+    r<-dAll[(i+3):(i+5),]
+    
+    domRecStrat <- r[which(r$meanStratNum==max(r$meanStratNum)),]$stratType[1]
+    devBeta <- unique(r$meanAlphaBeta - r$expAlphaBeta)[1]
+    expBeta <- unique(r$expAlphaBeta)[1]
+    beta <- unique(r$meanAlphaBeta)[1]
+    meanRecFit <- sum(r$meanFit * r$meanStratFreq)
+    
+    #Correcting tolerance for mutation pressure
+    tolerance <- tol + ( ( (s[1,]$mutRateAlpha*s[1,]$mutStepAlpha) +
+                             (r[1,]$mutRateBeta*r[1,]$mutStepBeta)
+    ) / 2 )
+    
+    stratsOkay <- FALSE
+    #For non-pooling:
+    if (s[1,]$meanStratFreq > 1-(toleranceStrategy + s[1,]$mutRateStrategySender) & 
+        r[1,]$meanStratFreq > 1-(toleranceStrategy + r[1,]$mutRateStrategyReceiver)){
+      stratsOkay <- TRUE
+    }
+    if (stratsOkay == FALSE){
+      equilib <- "Pooling"
+    } else {  #strats okay
+      #Rewriting equilibrium definitions
+      
+      distToExp_alpha <- abs(expAlpha - alpha)
+      distToHonest_alpha <- abs(0 - alpha)
+      distToPool_alpha <- abs(1 - alpha)
+      
+      distToExp_beta <- abs(expBeta - beta)
+      distToHonest_beta <- abs(1 - beta)
+      distToPool_beta <- abs(0 - beta)
+      
+      meanDistToExp <- (distToExp_alpha + distToExp_beta)/2 
+      meanDistToHonest <- (distToHonest_alpha + distToHonest_beta)/2 
+      meanDistToPool <- (distToPool_alpha + distToPool_beta)/2 
+      
+      distToExp_alpha
+      distToHonest_alpha
+      distToPool_alpha
+      
+      equilib<-"none selected yet"
+      
+      #One problem - negative c1 and c2 change expectations.
+      #Pooling 
+      
+      if (alpha >= (1-tolerance)){
+        equilib <- "Pooling"
+      }
+      if (beta <= tolerance){
+        equilib <- "Pooling"
+      }
+      
+      #Honest
+      if (alpha < tolerance & beta > (1-tolerance)){
+        equilib <- "Honest"
+      }
+      
+      if (equilib == "none selected yet"){
+        #This means we are not in zone for hybrid or honest
+        #Meaning we don't need to worry about overlap between hybrid and honest zones
+        if (abs(devAlpha) < tolerance & abs(devBeta) < tolerance){
+          equilib <- "Hybrid Good"
+        } else { #Not honest, not pooling, not Hybrid Good
+          equilib <- "Hybrid Poor"
+        }
+      }
+      
+      #Determine overlap between honest and hybrid zone
+      if (equilib == "Honest"){
+        #Is it closer to honest or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToHonest){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+      #Determine overlap between pooling and hybrid zone
+      if (equilib == "Pooling"){
+        #Is it closer to pooling or to an expected hybrid equilib?
+        #We only care if hybrid is expected
+        if (expAlpha > 0 & expBeta < 1 & expAlpha < 1 & expBeta > 1){
+          if (meanDistToExp < meanDistToPool){
+            #Cloer to hybrid
+            equilib <- "Hybrid Good"
+          }
+        }
+      }
+    }
+    
+    row$domSendStrat <- domSendStrat
+    row$domRecStrat <- domRecStrat
+    row$meanSendFit <- meanSendFit
+    row$meanRecFit <- meanRecFit
+    row$devAlpha <- devAlpha
+    row$devBeta <- devBeta
+    row$alpha <- alpha
+    row$beta <- beta
+    row$equilib <- equilib
+    equilibs <- rbind(equilibs,row)
+    
+    i <- i + 6  
+  }
+  equilibs$tol <- tol
+  equilibs$u <- paste0(equilibs$mutRateAlpha,"_",equilibs$mutRateStrategySender)
+  
+  #### saved data ####
+  write.csv(equilibs,file=paste0(dir7,"/",tol,"_equilibsTolNoSig.csv"), row.names=FALSE)
+}
+
+#### Plots - faceted ####
 library(scatterpie)
-
-#making data for pie chart
-data$row <- paste0(data$c1,"_",data$c2,"_",data$u)
-pies <- data.frame()
-for (r in unique(data$row)){
-  dTemp <- subset(data,row==r)
-  sumHybrid <- sum(dTemp$equilib=="Hybrid")
-  sumHonest <- sum(dTemp$equilib=="Honest")
-  sumPooling <- sum(dTemp$equilib=="Pooling")
-  pRow<-data.frame(r)
-  pRow$c1Pie <- unique(dTemp$c1)
-  pRow$c2Pie <- unique(dTemp$c2)
-  pRow$Honest <- sumHonest
-  pRow$Hybrid <- sumHybrid
-  pRow$Pooling <- sumPooling
-  pRow$mutRateAlphaBeta <- unique(dTemp$mutRateAlpha)
-  pRow$mutRateStrat <- unique(dTemp$mutRateStrategySender)
-  pies <- rbind(pies,pRow)
+tol<-0.05
+#### For thesis - facet pie plot ####
+for (tol in c(0.05,0.1,0.15,0.20,0.25,0.3)){
+  equilibs<-read.csv(paste0(dir7,"/",tol,"_equilibsTolNoSig.csv"))
+  data<-subset(equilibs)
+  
+  
+  
+  #making data for pie chart
+  data$row <- paste0(data$c1,"_",data$c2,"_",data$mutRateAlpha,"_",data$mutRateStrategySender)
+  pies <- data.frame()
+  for (r in unique(data$row)){
+    dTemp <- subset(data,row==r)
+    sumHybridGood <- sum(dTemp$equilib=="Hybrid Good")
+    sumHybridPoor <- sum(dTemp$equilib=="Hybrid Poor")
+    sumHonest <- sum(dTemp$equilib=="Honest")
+    sumPooling <- sum(dTemp$equilib=="Pooling")
+    pRow<-data.frame(r)
+    pRow$c1Pie <- unique(dTemp$c1)
+    pRow$c2Pie <- unique(dTemp$c2)
+    pRow$Honest <- sumHonest
+    pRow$Hybrid_Good <- sumHybridGood
+    pRow$Hybrid_Poor <- sumHybridPoor
+    pRow$Pooling <- sumPooling
+    sumReversePoor <- sum(dTemp$equilib=="Reverse Poor")
+    sumReverseGood <- sum(dTemp$equilib=="Reverse Strong")
+    pRow$Reverse_Poor <- sumReversePoor
+    pRow$Reverse_Good <- sumReverseGood
+    pRow$mutRateAlphaBeta <- unique(dTemp$mutRateAlpha)
+    pRow$mutRateStrat <- unique(dTemp$mutRateStrategySender)
+    pies <- rbind(pies,pRow)
+  }
+  pies2<-pies[,-1]
+  options(scipen = 999)
+  
+  p<-ggplot(data,aes(c1,c2)) +
+    geom_vline(xintercept=1,linetype="dotted") + 
+    geom_vline(xintercept=0) + 
+    geom_hline(yintercept=1,linetype="dotted") + 
+    geom_hline(yintercept=0) + 
+    geom_abline(intercept = 0, slope = 1, 
+                linetype="dotted") +
+    geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
+                    cols = colnames(pies2)[3:7],size=0.09,pie_scale=1.2) + #old size 0.09
+    theme_minimal() +
+    scale_fill_manual(values=c("#49FC3CFC","#BD4848FC","#F58E8EFC","#3473C7"
+                               ,"#9FC3F2"
+    )) +
+    #labs(title="Honest Start") +
+    labs(title="No Signal Start: G=300000") +
+    labs(subtitle=paste0("Tolerance: ",tol,"\nMut Rate Strategy")) +
+    labs(fill="Mut Rate\nAlpha Beta\n\nEquilibrium") +
+    facet_grid(mutRateAlphaBeta~mutRateStrat) + 
+    theme(panel.spacing = unit(1, "lines"))
+  p
+  ggsave(paste0(tol,"_FinalSize.png"),plot=p,
+         device="png",bg="white",path=dir7,height=9,width=11.25,unit="in") #width was 10 for non subset
 }
-pies2<-pies[,-1]
 
-p<-ggplot(data,aes(c1,c2)) +
-  geom_vline(xintercept=1,linetype="dashed") + 
-  geom_vline(xintercept=0) + 
-  geom_hline(yintercept=1,linetype="dashed") + 
-  geom_hline(yintercept=0) + 
-  geom_abline(intercept = 0, slope = 1, 
-              linetype="dashed") +
-  geom_scatterpie(aes(x=c1Pie,y=c2Pie,group=r),data=pies2,
-                  cols = colnames(pies2)[3:5]) +
-  theme_bw() +
-  scale_fill_brewer(palette="Set1") +
-  labs(title="No Signalling Start") +
-  labs(subtitle="Mut Rate Strategy") +
-  labs(fill="Mut Rate\nAlpha Beta\n\nEquilibrium") +
-  facet_grid(mutRateAlphaBeta~mutRateStrat)
-p
-ggsave(paste0("all.png"),plot=p,
-       device="png",path=dir5,height=8,width=10,unit="in")
 
+#Exper 9 - Trajectories ####
+dir9 <- "D:/StAndrews/SignallingDiscrete/Exper9"
+summaryFiles9 <- list.files(dir9,"*summaryStats*")
+#First - create endData stats from summaryStats files produced by cpp
+cutoff <- 0.25   #Look at last this % of generations
+iterator <- 1
+endDataAll9<-data.frame()
+
+ID<-0
+for (i in summaryFiles9){
+  ID<-ID+1
+  dataAllReps <- read.csv(paste0(dir9,"/",i))
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    
+    initA<-data[1,]$meanAlphaBeta
+    initB<-data[4,]$meanAlphaBeta
+    
+    p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-1000))) +
+      geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+      geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+      geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+      facet_grid(indType~.) +
+      geom_hline(aes(yintercept=expAlphaBeta)) +
+      labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+      labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender)) +
+      labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+      theme_bw()
+    fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+    ggsave(plot=p,path=paste0(dir9,"/figs1000/"),
+           filename=paste0(fName,".png"),
+           height=6,width=8)
+    
+    p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-500))) +
+      geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+      geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+      geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+      facet_grid(indType~.) +
+      geom_hline(aes(yintercept=expAlphaBeta)) +
+      labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+      labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender)) +
+      labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+      theme_bw()
+    fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+    ggsave(plot=p,path=paste0(dir9,"/figs500/"),
+           filename=paste0(fName,".png"),
+           height=6,width=8)
+    
+    p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-100))) +
+      geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+      geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+      geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+      facet_grid(indType~.) +
+      geom_hline(aes(yintercept=expAlphaBeta)) +
+      labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+      labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender)) +
+      labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+      theme_bw()
+    fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+    data
+    ggsave(plot=p,path=paste0(dir9,"/figs100/"),
+           filename=paste0(fName,".png"),
+           height=6,width=8)
+    
+    
+    
+  }
+}
+
+#Analyze in a new way - conver this into a 'table'
+ID<-0
+for (i in summaryFiles9){
+  ID<-ID+1
+  dataAllReps <- read.csv(paste0(dir9,"/",i))
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    N<-data[1,]$N
+    m<-data[1,]$m
+    
+    combinedSendRespond<-data.frame()
+    
+    row<-1
+    while (row < nrow(data)){
+      S<-data[row:(row+2),]
+      R<-data[(row+3):(row+5),]
+      
+      #Chance of sending if T2
+      send<-0
+      #Strat 1, T2, send (alpha)
+      send<-send+S[1,]$stratNum/N*S[1,]$meanAlphaBeta
+      #Strat 2 = never send
+      #Strat 3 (send if T2), T2
+      send<-send+S[3,]$stratNum/N
+      
+      #Chance of responding to signal
+      #Strat 1, respond (beta)
+      respond<-R[1,]$stratNum/N*R[1,]$meanAlphaBeta
+      
+      #strat 2 = never respond
+      #strat 3 = respond if no signal.
+      
+      combinedSendRespond<-rbind(combinedSendRespond,c(S[1,]$gen,"Sender",send))
+      combinedSendRespond<-rbind(combinedSendRespond,c(S[1,]$gen,"Receiver",respond))
+      
+      row<-row+6
+    }
+    colnames(combinedSendRespond) <- c("gen","indType","combined")
+    
+    dataCom<-merge(data,combinedSendRespond)
+    
+    initA<-data[1,]$meanAlphaBeta
+    initB<-data[4,]$meanAlphaBeta
+    
+    for (size in c(1000,500,100)){
+      avgAlpha<- mean(subset(dataCom, gen <= 5000 & gen >= (5000-size) & indType == "Sender")$meanAlphaBeta)
+      avgBeta<- mean(subset(dataCom, gen <= 5000 & gen >= (5000-size) & indType == "Receiver")$meanAlphaBeta)
+      avgComSend <- mean(as.numeric(subset(dataCom, gen <= 5000 & gen >= (5000-size) & indType == "Sender")$combined))
+      avgComRespond <- mean(as.numeric(subset(dataCom, gen <= 5000 & gen >= (5000-size) & indType == "Receiver")$combined))
+      dataCom
+      p<-ggplot(subset(dataCom, gen <= 5000 & gen >= (5000-size))) +
+        geom_hline(aes(yintercept=expAlphaBeta)) +
+        geom_hline(aes(yintercept=ifelse(indType=="Sender",avgAlpha,avgBeta)),
+                   color="black",linetype="dotted",linewidth=0.7,alpha=0.5) + 
+        geom_hline(aes(yintercept=ifelse(indType=="Sender",avgComSend,avgComRespond)),
+                   color="black",linetype="dashed",linewidth=0.6,alpha=0.5) + 
+        geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+        geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+        geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+        geom_path(aes(x=gen,y=as.numeric(combined)),color="orange",linetype="dashed") +
+        facet_grid(indType~.) +
+        labs(color="Solid Orange Line:\nAlpha or Beta\n\nDotted Line:\nCombined\n\nStrategy") +
+        labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender)) +
+        labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+        theme_bw()
+      fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+      
+      ggsave(plot=p,path=paste0(dir9,"/figsComb",size,"/"),
+             filename=paste0(fName,".png"),
+             height=6,width=8)
+    }
+    
+  }
+}
+
+
+#Exper 9B - Trajectories, hybrid start ####
+dir9B <- "D:/StAndrews/SignallingDiscrete/Exper9B/180_15_04_04_Exper_9B_Trajectories_HybridStart"
+summaryFiles9B <- list.files(dir9B,"*summaryStats*")
+#First - create endData stats from summaryStats files produced by cpp
+cutoff <- 0.25   #Look at last this % of generations
+iterator <- 1
+endDataAll9B<-data.frame()
+
+#Extract params
+ID<-0
+paramsAll<-data.frame()
+for (i in summaryFiles9B){
+  ID<-ID+1
+  dataAllReps <- read.csv(paste0(dir9B,"/",i))
+  paramsAll<-rbind(paramsAll,dataAllReps[1,])
+}
+
+for (i in 1:ncol(paramsAll)){
+  if (length(unique(paramsAll[,i])) > 1){
+    print(colnames(paramsAll)[i])
+    print(unique(paramsAll[,i]))
+  }
+}
+head(paramsAll)
+#Params: N, mutRateAlphaBeta, mutRateStrategy, mutStep
+
+#ID<-0
+# for (i in summaryFiles9B){
+#   ID<-ID+1
+#   dataAllReps <- read.csv(paste0(dir9B,"/",i))
+#   for (r in unique(dataAllReps$rep)){
+#     data <- subset(dataAllReps,rep==r)
+#     
+#     initA<-data[1,]$meanAlphaBeta
+#     initB<-data[4,]$meanAlphaBeta
+#     
+#     p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-1000))) +
+#       geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+#       geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+#       geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+#       facet_grid(indType~.) +
+#       geom_hline(aes(yintercept=expAlphaBeta)) +
+#       labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+#       labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender, " mu Step: ",data$mutStepAlpha)) +
+#       labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+#       theme_bw()
+#     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+#     p
+#     ggsave(plot=p,path=paste0(dir9B,"/figs1000/"),
+#            filename=paste0(fName,".png"),
+#            height=6,width=8)
+#     
+#     p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-500))) +
+#       geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+#       geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+#       geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+#       facet_grid(indType~.) +
+#       geom_hline(aes(yintercept=expAlphaBeta)) +
+#       labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+#       labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender)) +
+#       labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+#       theme_bw()
+#     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+#     ggsave(plot=p,path=paste0(dir9B,"/figs500/"),
+#            filename=paste0(fName,".png"),
+#            height=6,width=8)
+#     
+#     p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-100))) +
+#       geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+#       geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+#       geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+#       facet_grid(indType~.) +
+#       geom_hline(aes(yintercept=expAlphaBeta)) +
+#       labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+#       labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender)) +
+#       labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+#       theme_bw()
+#     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+#     data
+#     ggsave(plot=p,path=paste0(dir9B,"/figs100/"),
+#            filename=paste0(fName,".png"),
+#            height=6,width=8)
+#   }
+# }
+
+#Analyze in a new way - conver this into a 'table'
+ID<-0
+for (i in summaryFiles9B){
+  ID<-ID+1
+  dataAllReps <- read.csv(paste0(dir9B,"/",i))
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    N<-data[1,]$N
+    m<-data[1,]$m
+    
+    combinedSendRespond<-data.frame()
+    
+    row<-1
+    while (row < nrow(data)){
+      S<-data[row:(row+2),]
+      R<-data[(row+3):(row+5),]
+      
+      #Chance of sending if T2
+      send<-0
+      #Strat 1, T2, send (alpha)
+      send<-send+S[1,]$stratNum/N*S[1,]$meanAlphaBeta
+      #Strat 2 = never send
+      #Strat 3 (send if T2), T2
+      send<-send+S[3,]$stratNum/N
+      
+      #Chance of responding to signal
+      #Strat 1, respond (beta)
+      respond<-R[1,]$stratNum/N*R[1,]$meanAlphaBeta
+      
+      #strat 2 = never respond
+      #strat 3 = respond if no signal.
+      
+      combinedSendRespond<-rbind(combinedSendRespond,c(S[1,]$gen,"Sender",send))
+      combinedSendRespond<-rbind(combinedSendRespond,c(S[1,]$gen,"Receiver",respond))
+      
+      row<-row+6
+    }
+    colnames(combinedSendRespond) <- c("gen","indType","combined")
+    
+    dataCom<-merge(data,combinedSendRespond)
+    
+    initA<-data[1,]$meanAlphaBeta
+    initB<-data[4,]$meanAlphaBeta
+    
+    paramsAll$G
+    
+    for (size in c(10000,5000,1000,500,100)){
+      avgAlpha<- mean(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Sender")$meanAlphaBeta)
+      avgBeta<- mean(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Receiver")$meanAlphaBeta)
+      avgComSend <- mean(as.numeric(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Sender")$combined))
+      avgComRespond <- mean(as.numeric(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Receiver")$combined))
+      dataCom
+      p<-ggplot(subset(dataCom, gen <= 10000 & gen >= (10000-size))) +
+        geom_hline(aes(yintercept=expAlphaBeta)) +
+        geom_hline(aes(yintercept=ifelse(indType=="Sender",avgAlpha,avgBeta)),
+                   color="black",linetype="dotted",linewidth=0.7,alpha=0.5) + 
+        geom_hline(aes(yintercept=ifelse(indType=="Sender",avgComSend,avgComRespond)),
+                   color="black",linetype="dashed",linewidth=0.6,alpha=0.5) + 
+        geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+        geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+        geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+        geom_path(aes(x=gen,y=as.numeric(combined)),color="orange",linetype="dashed") +
+        facet_grid(indType~.) +
+        labs(color="Solid Orange Line:\nAlpha or Beta\n\nDotted Line:\nCombined\n\nStrategy") +
+        labs(title=paste0("N: ",data$N, " Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender, "mu Step: ",data$mutStepAlpha)) +
+      #  labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+        theme_bw()
+      p
+      fName<-paste0(ID,"_",unique(paste0(data$N,"_",data$mutRateAlpha,"_",data$mutRateStrategySender,"_",round(data$initA,3),"_",round(data$initB,3),data$mutStepAlpha)))
+      ggsave(plot=p,path=paste0(dir9B,"/figsComb",size,"/"),
+             filename=paste0(fName,".png"),
+             height=6,width=8)
+    }
+    
+  }
+}
