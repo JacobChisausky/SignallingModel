@@ -21,93 +21,69 @@ using namespace std;
 
 class Sender {
 public:
-	int Strategy;
-	double Alpha;
-	double fitness;
+	double s01;
+	double s11;
 	int Type;	//T1 or T2
+	double fitness = 0.0;
 
-	Sender(int Str, double ab){
-		Strategy = Str;
-		Alpha = ab;
-		fitness = 0;
+	Sender(double a, double b){
+		s01 = a;
+		s11 = b;
+		//s01: q = 0, send 1
+		//s11: q = 1, send 1
+
 		Type = 2;	//Default
 	}
-
-	//	void setFitness(double val){
-	//		fitness = val;
-	//	}
 };
 
 class Receiver {
 public:
-	int Strategy;
-	double Beta;
-	double fitness;
+	double r01;
+	double r11;
+	double fitness = 0.0;
 
-	Receiver(int Str, double ab){
-		Strategy = Str;
-		Beta = ab;
-		fitness = 0;
+	Receiver(double a, double b){
+		r01 = a;
+		r11 = b;
+		//r01; no signal, respond 1
+		//r11; signal received, respond 1
 	}
-
-	//	void setFitness(double val){
-	//		fitness = val;
-	//	}
 };
 
 
 int main(int argc, char* argv[]) {
+//int main() {
 
 	int selectionMethod = 2; //1 = normalized roulette. 2 = k-tournament
 	//int k = 2;	//for k tournament selection - for now, code only written to support k=2
-
-	//Notes
-	//When c1 and c2 are close, alpha is much lower than expectation (N = 1000)
-
-
+/*
 	//Take parameters - old way
-	/*
-	int seed = 123456789;
-	double N = 10000;	//There will be N receivers and N senders. Stored as double for calculations
-	int G = 2000;
-
-	double c1 = 0.95;	//Signal cost to T1
-	double c2 = 1.05;	//Signal cost to T2
-	double v1 = 1;		//Benefit to T1
-	double v2 = 1;		//Benefit to T2
-	double w1 = 1;		//Receiver Payoff: A1 to T1
-	double w2 = 0;		//Receiver Payoff: A2 to T1
-	double w3 = 0;		//Receiver Payoff: A1 to T2
-	double w4 = 1;		//Receiver Payoff: A2 to T2
-	double m = .25;	//Probability of being T1
-	int interactionPartners = 1;
-
-	double mutRateAlpha = 	0.01;	//Chance of a mutation occurring each generation
-	double mutRateBeta = 	0.01;
-	double mutRateStrategySender =   0.01;
-	double mutRateStrategyReceiver = 0.01;
-	double mutStepAlpha = 	0.4;	//SD of a normal distribution of mutation size with mean 0
-	double mutStepBeta = 	0.4;
-
-	string alphaBetaMutation = "always"; //"always" or "strict" or "random". Always = alpha and beta can mutate with any strategy. Strict = alpha and beta can only mutate with strategy 1. Random = a new alpha or beta are drawn when an individual mutates to strategy 1
-
-	string initializationType = "random"; //"random" or "parameter". For latter option, see below
-
-	bool cauchyDist = true; //If true, use caucy dist for mutations. If false, use normal dist
-
-	int initStrategySender = 1;
-	int initStrategyReceiver = 1;
-	int initAlpha = 1;
-	int initBeta = 0;
-
-	int replicates = 1;
-
-	int coutReport = 0;
-	int reportFreq = 50; //Export data every this many generations
-
-	string dataFileName = "same";
-	string dataFileFolder = "C:/Users/owner/Documents/S4/Simulation";
-	 */
+	int	seed	=	123456789;
+	double	N	=	1000;
+	int	G	=	1000;
+	double	c1	=	0.1;
+	double	c2	=	0.5;
+	double	v1	=	1.0;
+	double	v2	=	1.0;
+	double	w1	=	1.0;
+	double	w2	=	0.0;
+	double	w3	=	0.0;
+	double	w4	=	1.0;
+	double	m	=	1/3;
+	int	interactionPartners	=	10;
+	double	mutRate	=	0.01;
+	double	mutStep	=	0.01;
+	bool	cauchyDist	=	false;
+	double	initS01	=	0;
+	double	initS11	=	1;
+	double	initR01	=	0;
+	double	initR11	=	1;
+	int	replicates	=	1	;
+	int	reportFreq	=	10;
+	std::string	dataFileName	=	"dataFile";
+	std::string	dataFileFolder	=	"D:/StAndrews/Discrete_local/";
+	bool	computeMeansInCpp	=	true;
+*/
 
 	//Take parameters from parameter file using json - new way
 
@@ -121,7 +97,6 @@ int main(int argc, char* argv[]) {
 	int seed = sim_pars.seed;
 	double N = sim_pars.N;	//There will be N receivers and N senders. Stored as double for calculations
 	int G = sim_pars.G;
-
 	double c1 = sim_pars.c1;	//Signal cost to T1
 	double c2 = sim_pars.c2;	//Signal cost to T2
 	double v1 = sim_pars.v1;		//Benefit to T1
@@ -132,46 +107,53 @@ int main(int argc, char* argv[]) {
 	double w4 = sim_pars.w4;		//Receiver Payoff: A2 to T2
 	double m = sim_pars.m;	//Probability of being T1
 	int interactionPartners = sim_pars.interactionPartners;
-
-	double mutRateAlpha = 	sim_pars.mutRateAlpha;	//Chance of a mutation occurring each generation
-	double mutRateBeta = 	sim_pars.mutRateBeta;
-	double mutRateStrategySender =   sim_pars.mutRateStrategySender;
-	double mutRateStrategyReceiver = sim_pars.mutRateStrategyReceiver;
-	double mutStepAlpha = 	sim_pars.mutStepAlpha;	//SD of a normal distribution of mutation size with mean 0
-	double mutStepBeta = 	sim_pars.mutStepBeta;
-
-	std::string alphaBetaMutation = sim_pars.alphaBetaMutation; //"always" or "strict" or "random". Always = alpha and beta can mutate with any strategy. Strict = alpha and beta can only mutate with strategy 1. Random = a new alpha or beta are drawn when an individual mutates to strategy 1
-	if (alphaBetaMutation != "always" && alphaBetaMutation != "strict" && alphaBetaMutation != "random") {
-		std::cout << "Invalid entry for alphaBetaMutation";
-		return 91;
-	}
-
-	std::string initializationType = sim_pars.initializationType; //"random" or "parameter". For latter option, see below
-	if (initializationType != "random" && initializationType != "parameter"){
-		std::cout << "Invalid entry for initializationType";
-		return 92;
-	}
-
+	double mutRate = sim_pars.mutRate;
+	double mutStep = sim_pars.mutStep;
 	bool cauchyDist = sim_pars.cauchyDist; //If true, use caucy dist for mutations. If false, use normal dist
-
-	int initStrategySender = sim_pars.initStrategySender;
-	int initStrategyReceiver = sim_pars.initStrategyReceiver;
-	int initAlpha = sim_pars.initAlpha;
-	int initBeta = sim_pars.initBeta;
-
+	double initS01 = sim_pars.initS01;	//Chance of sending a signal if q = 0
+	double initS11 = sim_pars.initS11;  //Chance of sending a signal if q = 1
+	double initR01 = sim_pars.initR01;	//Chance of r=1 if receive s = 0
+	double initR11 = sim_pars.initR11;  //Chance of r=1 if receive s = 1
 	int replicates = sim_pars.replicates;
-
-	int coutReport = sim_pars.coutReport;	//0 = don't report
 	int reportFreq = sim_pars.reportFreq; //Export data every this many generations
-
 	std::string dataFileName = sim_pars.dataFileName;
 	std::string dataFileFolder = sim_pars.dataFileFolder;
+	bool computeMeansInCpp = sim_pars.computeMeansInCpp;  //Add option to compute generational means in CPP instead of exporting all data, becaues with large N the .csv files become difficult to work with
 
-	//Add option to compute generational means in CPP instead of exporting all data, becaues with large N the .csv files become difficult to work with
-	bool computeMeansInCpp = sim_pars.computeMeansInCpp;
+
+
+
+
+	//double mutRateAlpha = 	sim_pars.mutRateAlpha;	//Chance of a mutation occurring each generation
+	//double mutRateBeta = 	sim_pars.mutRateBeta;
+	//double mutRateStrategySender =   sim_pars.mutRateStrategySender;
+	//double mutRateStrategyReceiver = sim_pars.mutRateStrategyReceiver;
+	//double mutStepAlpha = 	sim_pars.mutStepAlpha;	//SD of a normal distribution of mutation size with mean 0
+	//double mutStepBeta = 	sim_pars.mutStepBeta;
+
+	//	std::string alphaBetaMutation = sim_pars.alphaBetaMutation; //"always" or "strict" or "random". Always = alpha and beta can mutate with any strategy. Strict = alpha and beta can only mutate with strategy 1. Random = a new alpha or beta are drawn when an individual mutates to strategy 1
+	//	if (alphaBetaMutation != "always" && alphaBetaMutation != "strict" && alphaBetaMutation != "random") {
+	//		std::cout << "Invalid entry for alphaBetaMutation";
+	//		return 91;
+	//	}
+
+
+	//	std::string initializationType = sim_pars.initializationType; //"random" or "parameter". For latter option, see below
+	//	if (initializationType != "random" && initializationType != "parameter"){
+	//		std::cout << "Invalid entry for initializationType";
+	//		return 92;
+	//	}
+
+
+	//int initStrategySender = sim_pars.initStrategySender;
+	//int initStrategyReceiver = sim_pars.initStrategyReceiver;
+	//int initAlpha = sim_pars.initAlpha;
+	//int initBeta = sim_pars.initBeta;
 
 	//_________End parameter input
 
+	int numT1 = round(m*N);	//**This rounding could produce minor deviations from analytic results
+	double mCorrected = double(numT1)/double(N);
 
 	const std::time_t now = std::time(nullptr) ; // get the current time point
 	const std::tm calendar_time = *std::localtime( std::addressof(now) ) ;
@@ -208,32 +190,33 @@ int main(int argc, char* argv[]) {
 	if (computeMeansInCpp == true){
 		summaryStats.open(str3);
 	}
-
 	//Prepare output files
-	dataLog << "rep,gen,ind,indType,sendType,strategy,alphaBeta,fitness";
-	params << "seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initializationType,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates,alphaBetaMutation,cauchyDist";
-	params << "\n" << to_string(seed) << "," << to_string(N) <<","<< to_string(G) <<","<< to_string(c1) <<","<< to_string(c2) <<","<< to_string(v1)<<","<<to_string(v2)<<","<<to_string(w1)<<","<<to_string(w2)<<","<<to_string(w3)<<","<<to_string(w4)<<","<<to_string(m)<<","<<to_string(interactionPartners)<<","<<to_string(mutRateAlpha)<<","<<to_string(mutRateBeta)<<","<<to_string(mutRateStrategySender)<<","<<to_string(mutRateStrategyReceiver)<<","<<to_string(mutStepAlpha)<<","<<to_string(mutStepBeta)<<","<<initializationType<<","<<to_string(initStrategySender)<<","<<to_string(initStrategyReceiver)<<","<<to_string(initAlpha)<<","<<to_string(initBeta)<<","<<to_string(replicates)<<","<<alphaBetaMutation<<","<<to_string(cauchyDist),"\n";
+	dataLog << "rep,gen,ind,indType,strat01,strat11,fitness"; //We only need to report 2 cells of each individual
+	params << "seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,mCorrected,interactionPartners,mutRate,mutStep,initS01,initS11,initR01,initR11,replicates,cauchyDist";
+	params << "\n" << std::to_string(seed) << "," << std::to_string(N) << "," << std::to_string(G) << "," << std::to_string(c1) << "," << std::to_string(c2) << "," << std::to_string(v1) << "," << std::to_string(v2) << "," << std::to_string(w1) << "," << std::to_string(w2) << "," << std::to_string(w3) << "," << std::to_string(w4) << "," << std::to_string(m) << "," << std::to_string(mCorrected) << "," << std::to_string(interactionPartners) << "," << std::to_string(mutRate) << "," << std::to_string(mutStep) << "," << std::to_string(initS01) << "," << std::to_string(initS11) << "," << std::to_string(initR01) << "," << std::to_string(initR11) << "," << std::to_string(replicates) << "," << std::to_string(cauchyDist),"\n";
+	//params << "\n" << to_string(seed) << "," << to_string(N) <<","<< to_string(G) <<","<< to_string(c1) <<","<< to_string(c2) <<","<< to_string(v1)<<","<<to_string(v2)<<","<<to_string(w1)<<","<<to_string(w2)<<","<<to_string(w3)<<","<<to_string(w4)<<","<<to_string(m)<<","<<to_string(interactionPartners)<<","<<to_string(mutRateAlpha)<<","<<to_string(mutRateBeta)<<","<<to_string(mutRateStrategySender)<<","<<to_string(mutRateStrategyReceiver)<<","<<to_string(mutStepAlpha)<<","<<to_string(mutStepBeta)<<","<<initializationType<<","<<to_string(initStrategySender)<<","<<to_string(initStrategyReceiver)<<","<<to_string(initAlpha)<<","<<to_string(initBeta)<<","<<to_string(replicates)<<","<<alphaBetaMutation<<","<<to_string(cauchyDist),"\n";
 	if (computeMeansInCpp == true){
-		summaryStats << "rep,gen,indType,stratNum,stratType,meanAlphaBeta,meanFit,expAlphaBeta,seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initializationType,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates,alphaBetaMutation,cauchyDist";
+		//summaryStats << "rep,gen,indType,stratNum,stratType,meanAlphaBeta,meanFit,expAlphaBeta,seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,interactionPartners,mutRateAlpha,mutRateBeta,mutRateStrategySender,mutRateStrategyReceiver,mutStepAlpha,mutStepBeta,initializationType,initStrategySender,initStrategyReceiver,initAlpha,initBeta,replicates,alphaBetaMutation,cauchyDist";
+		summaryStats << "rep,gen,indType,strat01,strat11,meanFit,expAlphaBeta,seed,N,G,c1,c2,v1,v2,w1,w2,w3,w4,m,mCorrected,interactionPartners,mutRate,mutStep,init01,init11,replicates,cauchyDist";
 	}
 
-	auto MutationDistAlpha = std::normal_distribution<double>(0.0, std::abs(mutStepAlpha));
-	auto MutationDistBeta = std::normal_distribution<double>(0.0, std::abs(mutStepBeta));
+	auto mutDist = std::normal_distribution<double>(0.0, std::abs(mutStep));
+	//auto MutationDistBeta = std::normal_distribution<double>(0.0, std::abs(mutStepBeta));
 
 	if (cauchyDist == 1) {
-		auto MutationDistAlpha = std::cauchy_distribution<double>(0.0, std::abs(mutStepAlpha));
-		auto MutationDistBeta = std::cauchy_distribution<double>(0.0, std::abs(mutStepBeta));
+		auto mutDist = std::cauchy_distribution<double>(0.0, std::abs(mutStep));
+		//auto MutationDistBeta = std::cauchy_distribution<double>(0.0, std::abs(mutStepBeta));
 	}
 
-	//Random number generators
+//Random number generators
 	auto rng = std::default_random_engine {seed};
 	std::uniform_real_distribution<double> prob(0,1);
-	std::uniform_int_distribution<int> randInt(1,3);
+	//std::uniform_int_distribution<int> randInt(1,3);
 	std::uniform_int_distribution<int> randN(0,N-1);
 
 	//Fitness distribution
-	auto SenderFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
-	auto ReceiverFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
+	//auto SenderFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
+	//auto ReceiverFitnessDist = rndutils::mutable_discrete_distribution<int, rndutils::all_zero_policy_uni>{};
 
 	//Vector used for drawing random numbers without replacement
 	std::vector<int> nullVec;
@@ -256,11 +239,12 @@ int main(int argc, char* argv[]) {
 	double maxSenderFit = 100.0;
 	double minSenderFit = -100.0;
 
-	double maxReceiverFitOld = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
-	double minReceiverFitOld = double(interactionPartners)*double(std::min(w1,std::min(w2,std::min(w3,w4))));
-	double maxSenderFitOld = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
-	double minSenderFitOld = double(interactionPartners)*(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
+	//double maxReceiverFitOld = double(interactionPartners)*double(std::max(w1,std::max(w2,std::max(w3,w4))));
+	//double minReceiverFitOld = double(interactionPartners)*double(std::min(w1,std::min(w2,std::min(w3,w4))));
+	//double maxSenderFitOld = double(interactionPartners)* (max(v1,v2) - std::min(0.0,std::min(c1,c2)));	//To account for negative costs which will increase max fitness
+	//double minSenderFitOld = double(interactionPartners)*(-1.0*std::max(c1,c2) + std::min(0.0,std::min(v1,v2)));	//To account for negative benefits
 
+	/*
 	if (selectionMethod == 1){
 		if (maxReceiverFitOld > maxReceiverFit){
 			std::cout << "Possible receiver fitness too high (>100)";
@@ -281,6 +265,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	cout << maxReceiverFitOld << endl << minReceiverFitOld << endl << maxSenderFitOld << endl << minSenderFitOld << endl;
+	 */
 
 	/*if (minReceiverFit == maxReceiverFit){	//To avoid divide by 0
 		maxReceiverFit += 0.00001;
@@ -304,28 +289,29 @@ int main(int argc, char* argv[]) {
 		std::vector<double> SenderFitnesses(N);
 		std::vector<double> ReceiverFitnesses(N);
 
+
 		//Initialize Population
-		if (initializationType == "parameter"){
-			for (int i = 0; i < N; i++){
-				SenderVector.push_back(Sender(initStrategySender,initAlpha));
-				ReceiverVector.push_back(Receiver(initStrategyReceiver,initBeta));
+		//	if (initializationType == "parameter"){
+		for (int i = 0; i < N; i++){
+			SenderVector.push_back(Sender(initS01,initS11));
+			ReceiverVector.push_back(Receiver(initR01,initR11));
 
-				OffspringSenderVector.push_back(Sender(1,0));
-				OffspringReceiverVector.push_back(Receiver(1,1));
-			}
-		} else if (initializationType == "random"){
-			for (int i = 0; i < N; i++){
-				SenderVector.push_back(Sender(randInt(rng),prob(rng)));
-				ReceiverVector.push_back(Receiver(randInt(rng),prob(rng)));
-
-				OffspringSenderVector.push_back(Sender(1,0));
-				OffspringReceiverVector.push_back(Receiver(1,1));
-			}
-		} else {
-			return -1;
+			OffspringSenderVector.push_back(Sender(1,0));
+			OffspringReceiverVector.push_back(Receiver(1,1));
 		}
 
-		int numT1 = round(m*N);	//**This rounding could produce minor deviations from analytic results
+		//	} else if (initializationType == "random"){
+		//		for (int i = 0; i < N; i++){
+		//			SenderVector.push_back(Sender(randInt(rng),prob(rng)));
+		//			ReceiverVector.push_back(Receiver(randInt(rng),prob(rng)));
+
+		//			OffspringSenderVector.push_back(Sender(1,0));
+		//			OffspringReceiverVector.push_back(Receiver(1,1));
+		//		}
+		//	} else {
+		//		return -1;
+		//	}
+
 		//Start Generation Loop
 		for (int g = 0; g < G; g++){
 
@@ -336,80 +322,7 @@ int main(int argc, char* argv[]) {
 			}
 
 
-
 			//Determine Fitnesses
-
-			//Method 1 - Whole Population
-			/*
-		//Determine fitness for strategy 2 and 3 for receiver and senders (these will be the same for all individuals because A and B don't matter
-
-		//Determine Composition of Sender and Receiver Populations
-
-		double numSS1 = 0; //Number of individuals using sender strategy 1
-		double numSS2 = 0; //Stored as doubles so that nothing gets cast as int in calculations
-		double numSS3 = 0;
-		double numRS1 = 0;
-		double numRS2 = 0;
-		double numRS3 = 0;
-		long double totalAlpha = 0;
-		long double totalBeta = 0;
-		double meanAlpha = 0;
-		double meanBeta = 0;
-
-		for (int i = 0; i < SenderVector.size(); i++){
-			if (SenderVector[i].Strategy == 1){
-				numSS1++;
-				totalAlpha += SenderVector[i].AlphaBeta;
-			} else if (SenderVector[i].Strategy == 2){
-				numSS2++;
-			} else {
-				numSS3++;
-			}
-		}
-		meanAlpha = totalAlpha/numRS1;
-
-		for (int i = 0; i < ReceiverVector.size(); i++){
-			if (ReceiverVector[i].Strategy == 1){
-				numRS1++;
-				totalBeta += ReceiverVector[i].AlphaBeta;
-			} else if (ReceiverVector[i].Strategy == 2){
-				numRS2++;
-			} else {
-				numRS3++;
-			}
-		}
-		meanBeta = totalBeta/numRS1;
-
-
-		//Senders
-		//Strategy SS2: Never Signal
-		//Fitness based only on receiver action (receivers playing A1 to no signal), which occurs in RS2 and RS3.
-		double fitnessSS2 = 0;
-		if (numSS2 > 0){
-			fitnessSS2 = m*v1*((numRS2+numRS3)/N) + (1-m)*v2*((numRS2+numRS3)/N);
-		}
-
-		//Strategy SS3: Signal if T2. Not if T1
-		double fitnessSS3 = 0;
-		if (numSS3 > 0){
-			//Fitness = signal,A1 + signal,A2, + noSignal,A1 + noSignal,A2
-			fitnessSS3 = ((1-m)*(v1-c2)*(meanBeta*numRS1+numRS2)/N) +
-					((1-m)*(0-c2)*(1-meanBeta)*(numRS1+numRS3)/N) +
-					 m*v1*((numRS2+numRS3)/N) +
-					 0;
-		}
-
-		//Strategy SS1:
-		//We can determine a constant value which needs to be multiplied by alpha to give to each sender agent
-
-		//Fitness = T1,Sig,A1 + T1,Sig,A2 + T2,Sig,A1 + T2,Sig,A2 + T1,noSig,A1 + T1,noSig,A2 + T2,noSig,A1 + T2,noSig,A2
-		(m*(v1-c1)*(numRS1*meanBeta+numRS2)/N) +
-				(m*(0-c1)*(numRS1*(1-meanBeta)+numRS3)/N) +
-	work in progress...
-			 */
-
-			//Method 2 - Pairwise Comparisons
-
 			//Randomize order of sender and receiver populations
 			//Then pair sender 1 with receiver 1, 2 with 2, etc
 			//Randomize order again and repeat interactionPartner # of times
@@ -425,28 +338,24 @@ int main(int argc, char* argv[]) {
 					//Sender = SenderVector[j]
 					//Receiver = ReceiverVector[j]
 					bool signal = 0;
-					if (SenderVector[j].Type == 1 && SenderVector[j].Strategy == 1){
-						signal = 1;
-					} else if (SenderVector[j].Type == 2 && SenderVector[j].Strategy == 1){
-						//Determine using alpha...
-						if (prob(rng) < SenderVector[j].Alpha){
+					if (SenderVector[j].Type == 1){ //High quality
+						if (prob(rng) < SenderVector[j].s11){
 							signal = 1;
 						}
-					} else if (SenderVector[j].Type == 2 && SenderVector[j].Strategy == 3){
-						signal = 1;
+					} else { // type = 2, low quality
+						if (prob(rng) < SenderVector[j].s01){
+							signal = 1;
+						}
 					}
+					//Now whether or not a signal has been sent has been determined
 
-					int receiverAction = 2; //A1 or A2. A2 by default
-					if (signal == 1){
-						if (ReceiverVector[j].Strategy == 1){
-							if (prob(rng) < ReceiverVector[j].Beta){
-								receiverAction = 1;
-							}
-						} else if (ReceiverVector[j].Strategy == 2){
+					int receiverAction = 0; //A1 or A2. A2 by default. 0 = A2
+					if (signal == 1){ // signal received
+						if (prob(rng) < ReceiverVector[j].r11){
 							receiverAction = 1;
 						}
-					} else { //no signal
-						if (ReceiverVector[j].Strategy == 2 || ReceiverVector[j].Strategy == 3){
+					} else { // signal not received
+						if (prob(rng) < ReceiverVector[j].r01){
 							receiverAction = 1;
 						}
 					}
@@ -507,258 +416,145 @@ int main(int argc, char* argv[]) {
 				//std::cout << "\n-----------------------------------\n\n";
 			}//End loop for interaction partners
 
-			//SenderVector[10].fitness = 10;
+			//k-tournament selection
+			//First, pick k individuals (k=2)
+			//Determine highest fitness one
+			//If tie, pick random
+			//Winner reproduces
+			//Repeat
+			//randN(rng) produces random int from 0 to N-1
 
-			//Reproduction
-			//Using a discrete distribution of fitnesses
-
-			//Determine max and min fitnesses for normalization - now this is done earlier.
-			/*
-			double minSenderFit = SenderVector[1].fitness;
-			double maxSenderFit = SenderVector[1].fitness;
-			double minReceiverFit = ReceiverVector[1].fitness;
-			double maxReceiverFit = ReceiverVector[1].fitness;
-
-			for (int i = 0; i < N; i++){
-				if (SenderVector[i].fitness > maxSenderFit){
-					maxSenderFit = SenderVector[i].fitness;
-				} else if (SenderVector[i].fitness < minSenderFit){
-					minSenderFit = SenderVector[i].fitness;
-				}
-				if (ReceiverVector[i].fitness > maxReceiverFit){
-					maxReceiverFit = ReceiverVector[i].fitness;
-				} else if (ReceiverVector[i].fitness < minReceiverFit){
-					minReceiverFit = ReceiverVector[i].fitness;
-				}
-			}
-			 */
-
-			/*	for (int i = 0; i < N; i++){
-				if (SenderVector[i].fitness < minSenderFit){
-					//	cout << SenderVector[i].fitness << " " << minSenderFit <<" minYYY";
-					//return 2;
-				}
-			}
-			 */	//cout << endl;
-
-			if (selectionMethod == 1){
-				for (int i = 0; i < N; i++){
-					//With normalization
-					//	if (SenderVector[i].fitness < minSenderFit){
-					//		SenderFitnesses[i] = round(  (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit) * 10000 ) / 10000;
-					//	} else {
-					SenderFitnesses[i] = (SenderVector[i].fitness - minSenderFit)/(maxSenderFit-minSenderFit);
-					//	}
-					ReceiverFitnesses[i] = (ReceiverVector[i].fitness - minReceiverFit)/(maxReceiverFit-minReceiverFit);
-				}
-
-				SenderFitnessDist.mutate(SenderFitnesses.cbegin(), SenderFitnesses.cend());
-				ReceiverFitnessDist.mutate(ReceiverFitnesses.cbegin(), ReceiverFitnesses.cend());
-
-				//Determining parents of offspring. Store offspring in Offspring vector
-				for (int i = 0; i < N; i++){
-					//cout << SenderFitnessDist(rng) << " ";
-					OffspringSenderVector[i] = SenderVector[SenderFitnessDist(rng)];
-					OffspringReceiverVector[i] = ReceiverVector[ReceiverFitnessDist(rng)];
-
-					OffspringSenderVector[i].fitness = 0;
-					OffspringReceiverVector[i].fitness = 0;
-					OffspringSenderVector[i].Type = 2;
-				}
-
-			} else if (selectionMethod == 2){	//k-tournament selection
-				//First, pick k individuals (k=2)
-				//Determine highest fitness one
-				//If tie, pick random
-				//Winner reproduces
-				//Repeat
-				//randN(rng) produces random int from 0 to N-1
-
-				for (int n = 0; n < N; n++){
-					int rand1 = randN(rng);
-					int rand2 = randN(rng);
-					while (rand1 == rand2){
-						rand2 = randN(rng);
-					}
-					if (SenderVector[rand1].fitness > SenderVector[rand2].fitness){
-						OffspringSenderVector[n] = SenderVector[rand1];
-						OffspringSenderVector[n].fitness = 0;
-						OffspringReceiverVector[n].fitness = 0;
-						OffspringSenderVector[n].Type = 2;
-					} else if (SenderVector[rand1].fitness < SenderVector[rand2].fitness){
-						OffspringSenderVector[n] = SenderVector[rand2];
-						OffspringSenderVector[n].fitness = 0;
-						OffspringReceiverVector[n].fitness = 0;
-						OffspringSenderVector[n].Type = 2;
-					} else {
-						OffspringSenderVector[n] = SenderVector[rand1];
-						OffspringSenderVector[n].fitness = 0;
-						OffspringReceiverVector[n].fitness = 0;
-						OffspringSenderVector[n].Type = 2;
-					}
-
-					//Receivers
-					rand1 = randN(rng);
+			for (int n = 0; n < N; n++){
+				int rand1 = randN(rng);
+				int rand2 = randN(rng);
+				while (rand1 == rand2){
 					rand2 = randN(rng);
-					while (rand1 == rand2){
-						rand2 = randN(rng);
-					}
-					if (ReceiverVector[rand1].fitness > ReceiverVector[rand2].fitness){
-						OffspringReceiverVector[n] = ReceiverVector[rand1];
-						OffspringReceiverVector[n].fitness = 0;
-					} else if (ReceiverVector[rand1].fitness < ReceiverVector[rand2].fitness){
-						OffspringReceiverVector[n] = ReceiverVector[rand2];
-						OffspringReceiverVector[n].fitness = 0;
-					} else {
-						OffspringReceiverVector[n] = ReceiverVector[rand1];
-						OffspringReceiverVector[n].fitness = 0;
-					}
+				}
+				if (SenderVector[rand1].fitness > SenderVector[rand2].fitness){
+					OffspringSenderVector[n] = SenderVector[rand1];
+					OffspringSenderVector[n].fitness = 0.0;
+					OffspringSenderVector[n].Type = 2;
+				} else if (SenderVector[rand1].fitness < SenderVector[rand2].fitness){
+					OffspringSenderVector[n] = SenderVector[rand2];
+					OffspringSenderVector[n].fitness = 0.0;
+					OffspringSenderVector[n].Type = 2;
+				} else {
+					OffspringSenderVector[n] = SenderVector[rand1];
+					OffspringSenderVector[n].fitness = 0.0;
+					OffspringSenderVector[n].Type = 2;
+				}
+
+				//Receivers
+				rand1 = randN(rng);
+				rand2 = randN(rng);
+				while (rand1 == rand2){
+					rand2 = randN(rng);
+				}
+				if (ReceiverVector[rand1].fitness > ReceiverVector[rand2].fitness){
+					OffspringReceiverVector[n] = ReceiverVector[rand1];
+					OffspringReceiverVector[n].fitness = 0.0;
+				} else if (ReceiverVector[rand1].fitness < ReceiverVector[rand2].fitness){
+					OffspringReceiverVector[n] = ReceiverVector[rand2];
+					OffspringReceiverVector[n].fitness = 0.0;
+				} else {
+					OffspringReceiverVector[n] = ReceiverVector[rand1];
+					OffspringReceiverVector[n].fitness = 0.0;
 				}
 			}
-
 
 			//Mutation
 			for (int i = 0; i < N; i++){
-				if (prob(rng) < mutRateStrategySender){
-					int mut = randInt(rng);
-					while (OffspringSenderVector[i].Strategy == mut){
-						mut = randInt(rng);
+				if (prob(rng) < mutRate){ //Mutation occurs to s01
+					double mut = mutDist(rng);
+					if (OffspringSenderVector[i].s01 == 1.0 & mut > 0.0){ //This ensures that all mutations have an effect - if the value is 1.0 and the mutation is positive, make the mutation negative
+						mut = -1.0*mut;
 					}
-					OffspringSenderVector[i].Strategy = mut;
-					if (mut == 1 && alphaBetaMutation == "random"){
-						OffspringSenderVector[i].Alpha = prob(rng);
+					if (OffspringSenderVector[i].s01 == 0.0 & mut < 0.0){ //This ensures that all mutations have an effect - if the value is 0.0 and the mutation is negative, make the mutation positive
+						mut = -1.0*mut;
 					}
+					OffspringSenderVector[i].s01 += mut;
+					OffspringSenderVector[i].s01 = std::max(0.0,std::min(OffspringSenderVector[i].s01,1.0));	//Truncate from 0 to 1
 				}
 
-				if (prob(rng) < mutRateStrategyReceiver){
-					int mut = randInt(rng);
-					while (OffspringReceiverVector[i].Strategy == mut){
-						mut = randInt(rng);
+				if (prob(rng) < mutRate){ //Mutation occurs to s11
+					double mut = mutDist(rng);
+					if (OffspringSenderVector[i].s11 == 1.0 & mut > 0.0){ //This ensures that all mutations have an effect - if the value is 1.0 and the mutation is positive, make the mutation negative
+						mut = -1.0*mut;
 					}
-					OffspringReceiverVector[i].Strategy = mut;
-					if (mut == 1 && alphaBetaMutation == "random"){
-						OffspringReceiverVector[i].Beta = prob(rng);
+					if (OffspringSenderVector[i].s11 == 0.0 & mut < 0.0){ //This ensures that all mutations have an effect - if the value is 0.0 and the mutation is negative, make the mutation positive
+						mut = -1.0*mut;
 					}
+					OffspringSenderVector[i].s11 += mut;
+					OffspringSenderVector[i].s11 = std::max(0.0,std::min(OffspringSenderVector[i].s11,1.0));	//Truncate from 0 to 1
 				}
 
-				if (OffspringSenderVector[i].Strategy == 1 || alphaBetaMutation == "always"){
-					if (prob(rng) < mutRateAlpha){
-						OffspringSenderVector[i].Alpha += MutationDistAlpha(rng);
-						if (OffspringSenderVector[i].Alpha < 0){	//These corrections will make 0 and 1 'sticky', because half of the mutations
-							OffspringSenderVector[i].Alpha = 0;		//when alpha or beta = 0 or 1 will be thrown out. Is this bad?
-						}
-						if (OffspringSenderVector[i].Alpha > 1){
-							OffspringSenderVector[i].Alpha = 1;
-						}
+				if (prob(rng) < mutRate){ //Mutation occurs to s01
+					double mut = mutDist(rng);
+					if (OffspringReceiverVector[i].r01 == 1.0 & mut > 0.0){ //This ensures that all mutations have an effect - if the value is 1.0 and the mutation is positive, make the mutation negative
+						mut = -1.0*mut;
 					}
+					if (OffspringReceiverVector[i].r01 == 0.0 & mut < 0.0){ //This ensures that all mutations have an effect - if the value is 0.0 and the mutation is negative, make the mutation positive
+						mut = -1.0*mut;
+					}
+					OffspringReceiverVector[i].r01 += mut;
+					OffspringReceiverVector[i].r01 = std::max(0.0,std::min(OffspringReceiverVector[i].r01,1.0));	//Truncate from 0 to 1
 				}
 
-				if (OffspringReceiverVector[i].Strategy == 1 || alphaBetaMutation == "always"){
-					if (prob(rng) < mutRateBeta){
-						OffspringReceiverVector[i].Beta += MutationDistBeta(rng);
-						if (OffspringReceiverVector[i].Beta < 0){
-							OffspringReceiverVector[i].Beta = 0;
-						}
-						if (OffspringReceiverVector[i].Beta > 1){
-							OffspringReceiverVector[i].Beta = 1;
-						}
+				if (prob(rng) < mutRate){ //Mutation occurs to s01
+					double mut = mutDist(rng);
+					if (OffspringReceiverVector[i].r11 == 1.0 & mut > 0.0){ //This ensures that all mutations have an effect - if the value is 1.0 and the mutation is positive, make the mutation negative
+						mut = -1.0*mut;
 					}
+					if (OffspringReceiverVector[i].r11 == 0.0 & mut < 0.0){ //This ensures that all mutations have an effect - if the value is 0.0 and the mutation is negative, make the mutation positive
+						mut = -1.0*mut;
+					}
+					OffspringReceiverVector[i].r11 += mut;
+					OffspringReceiverVector[i].r11 = std::max(0.0,std::min(OffspringReceiverVector[i].r11,1.0));	//Truncate from 0 to 1
 				}
 			}
 
 			if (g%reportFreq == 0){
-				if (coutReport == 1){
-					for (int i = 0; i < 20; i++){
-						cout << SenderVector[i].Strategy << " " << SenderVector[i].Alpha << " " << SenderVector[i].fitness << " | ";
-					}
-					cout << endl;
-					for (int i = 0; i < 20; i++){
-						cout << ReceiverVector[i].Strategy << " " << ReceiverVector[i].Beta << " " << ReceiverVector[i].fitness << " | ";
-					}
-					cout << "\n--------------------------\n";
-				}
-
 				if (computeMeansInCpp == false){
 
 					for (int i = 0; i < N; i++){
-						dataLog << "\n" << rep << "," << g << "," << i << ",Sender," << SenderVector[i].Type << "," << SenderVector[i].Strategy << "," << SenderVector[i].Alpha << "," << SenderVector[i].fitness;
+						dataLog << "\n" << rep << "," << g << "," << i << ",Sender," << SenderVector[i].Type << "," << SenderVector[i].s01 << "," << SenderVector[i].s11 << "," << SenderVector[i].fitness;
 					}
 
 					for (int i = 0; i < N; i++){
-						dataLog << "\n" << rep << "," << g << "," << i << ",Receiver,na," << ReceiverVector[i].Strategy << "," << ReceiverVector[i].Beta << "," << ReceiverVector[i].fitness;
+						dataLog << "\n" << rep << "," << g << "," << i << ",Receiver,na," << ReceiverVector[i].r01 << "," << ReceiverVector[i].r11 << "," << ReceiverVector[i].fitness;
 					}
 				} else {
 					//Compute means
-					// rep, gen, indType, stratNum, stratType, meanAlphaBeta, meanFit, expAlphaBeta, fileNumber
-					int numSS1 = 0;
-					int numSS2 = 0;
-					int numSS3 = 0;
-					int numRS1 = 0;
-					int numRS2 = 0;
-					int numRS3 = 0;
+					long double total_s01 = 0.0;
+					long double total_s11 = 0.0;
+					long double total_r01 = 0.0;
+					long double total_r11 = 0.0;
 
-					long double totalAlpha = 0.0;
-					long double totalBeta = 0.0;
-
-					long double totalFitSS1 = 0.0;
-					long double totalFitSS2 = 0.0;
-					long double totalFitSS3 = 0.0;
-
-					long double totalFitRS1 = 0.0;
-					long double totalFitRS2 = 0.0;
-					long double totalFitRS3 = 0.0;
+					long double totalFit_s = 0.0;
+					long double totalFit_r = 0.0;
 
 					for (int i = 0; i < N; i++){
-						if (SenderVector[i].Strategy == 1){
-							numSS1 += 1;
-							totalFitSS1 += SenderVector[i].fitness;
-						} else if (SenderVector[i].Strategy == 2){
-							numSS2 += 1;
-							totalFitSS2 += SenderVector[i].fitness;
-						} else {
-							numSS3 += 1;
-							totalFitSS3 += SenderVector[i].fitness;
-						}
-						if (ReceiverVector[i].Strategy == 1){
-							numRS1 += 1;
-							totalFitRS1 += ReceiverVector[i].fitness;
-						} else if (ReceiverVector[i].Strategy == 2){
-							numRS2 += 1;
-							totalFitRS2 += ReceiverVector[i].fitness;
-						} else {
-							numRS3 += 1;
-							totalFitRS3 += ReceiverVector[i].fitness;
-						}
 
-						totalAlpha += SenderVector[i].Alpha;
-						totalBeta += ReceiverVector[i].Beta;
+						total_s01 += SenderVector[i].s01;
+						total_s11 += SenderVector[i].s11;
+						total_r01 += ReceiverVector[i].r01;
+						total_r11 += ReceiverVector[i].r11;
 
-						//totalFitS += SenderVector[i].fitness;
-						//totalFitR += ReceiverVector[i].fitness;
+						totalFit_s += SenderVector[i].fitness;
+						totalFit_r += ReceiverVector[i].fitness;
 					}
 
-					double meanAlpha = totalAlpha/N;
-					double meanBeta = totalBeta/N;
+					double mean_s01 = total_s01/N;
+					double mean_s11 = total_s11/N;
+					double mean_r01 = total_r01/N;
+					double mean_r11 = total_r11/N;
 
-					//double meanFitS = totalFitS/N;
-					//double meanFitR = totalFitR/N;
+					double meanFit_s = totalFit_s/N;
+					double meanFit_r = totalFit_r/N;
 
-					double meanFitSS1 = totalFitSS1/double(numSS1);
-					double meanFitSS2 = totalFitSS2/double(numSS2);
-					double meanFitSS3 = totalFitSS3/double(numSS3);
-
-					double meanFitRS1 = totalFitRS1/double(numRS1);
-					double meanFitRS2 = totalFitRS2/double(numRS2);
-					double meanFitRS3 = totalFitRS3/double(numRS3);
-
-
-					//                      rep          gen    indType    stratNum    stratType   meanAlphaBeta         meanFit         expAlphaBeta | Params |
-					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS1 << ",strat1," << meanAlpha << "," << meanFitSS1 << "," << expAlpha  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
-					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS2 << ",strat2," << meanAlpha << "," << meanFitSS2 << "," << expAlpha  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
-					summaryStats << "\n" << rep << "," << g << ",Sender," << numSS3 << ",strat3," << meanAlpha << "," << meanFitSS3 << "," << expAlpha  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
-					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS1 << ",strat1," << meanBeta << "," << meanFitRS1 << "," << expBeta  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
-					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS2 << ",strat2," << meanBeta << "," << meanFitRS2 << "," << expBeta  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
-					summaryStats << "\n" << rep << "," << g << ",Receiver," << numRS3 << ",strat3," << meanBeta << "," << meanFitRS3 << "," << expBeta  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<interactionPartners<<","<<mutRateAlpha<<","<<mutRateBeta<<","<<mutRateStrategySender<<","<<mutRateStrategyReceiver<<","<<mutStepAlpha<<","<<mutStepBeta<<","<<initializationType<<","<<initStrategySender<<","<<initStrategyReceiver<<","<<initAlpha<<","<<initBeta<<","<<replicates<<","<<alphaBetaMutation<<","<<cauchyDist;
+					//					   "rep,      gen,      indType,   strat01,            strat11,           meanFit,             expAlphaBeta,    seed,       N,      G,      c1,      c2,      v1,      v2,      w1,     w2,       w3,      w4,     m,       mCorrected,      interactionPartners,     mutRate,       mutStep,     init01,        init11,replicates,cauchyDist";
+					summaryStats << "\n" << rep << "," << g << ",Sender," << mean_s01 << "," << mean_s11 << "," << meanFit_s << "," << expAlpha  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<mCorrected<<","<<interactionPartners<<","<<mutRate<<","<<mutStep<<","<<initS01<<","<<initS11<<","<<replicates<<","<<cauchyDist;
+					summaryStats << "\n" << rep << "," << g << ",Receiver," << mean_r01 << "," << mean_r11 << "," << meanFit_r << "," << expBeta  <<","<< seed<<","<<N<<","<<G<<","<<c1<<","<<c2<<","<<v1<<","<<v2<<","<<w1<<","<<w2<<","<<w3<<","<<w4<<","<<m<<","<<mCorrected<<","<<interactionPartners<<","<<mutRate<<","<<mutStep<<","<<initR01<<","<<initR11<<","<<replicates<<","<<cauchyDist;
 
 					//Write means to summaryStats log.
 				}

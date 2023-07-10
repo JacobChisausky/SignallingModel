@@ -4632,9 +4632,9 @@ for (i in summaryFiles9){
 }
 
 
-#Exper 9B - Trajectories, hybrid start ####
-dir9B <- "D:/StAndrews/SignallingDiscrete/Exper9B/180_15_04_04_Exper_9B_Trajectories_HybridStart"
-summaryFiles9B <- list.files(dir9B,"*summaryStats*")
+#Exper 9B - Trajectories, hybrid star, 0.5 ####
+dir9B <- "D:/StAndrews/SignallingDiscrete/Exper9B/xxxxx..."
+summaryFiles9B <- list.files(dir10A,"*summaryStats*")
 #First - create endData stats from summaryStats files produced by cpp
 cutoff <- 0.25   #Look at last this % of generations
 iterator <- 1
@@ -4659,9 +4659,9 @@ head(paramsAll)
 #Params: N, mutRateAlphaBeta, mutRateStrategy, mutStep
 
 #ID<-0
-# for (i in summaryFiles9B){
+# for (i in summaryFiles10A){
 #   ID<-ID+1
-#   dataAllReps <- read.csv(paste0(dir9B,"/",i))
+#   dataAllReps <- read.csv(paste0(dir10A,"/",i))
 #   for (r in unique(dataAllReps$rep)){
 #     data <- subset(dataAllReps,rep==r)
 #     
@@ -4680,7 +4680,7 @@ head(paramsAll)
 #       theme_bw()
 #     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
 #     p
-#     ggsave(plot=p,path=paste0(dir9B,"/figs1000/"),
+#     ggsave(plot=p,path=paste0(dir10A,"/figs1000/"),
 #            filename=paste0(fName,".png"),
 #            height=6,width=8)
 #     
@@ -4695,7 +4695,7 @@ head(paramsAll)
 #       labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
 #       theme_bw()
 #     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
-#     ggsave(plot=p,path=paste0(dir9B,"/figs500/"),
+#     ggsave(plot=p,path=paste0(dir10A,"/figs500/"),
 #            filename=paste0(fName,".png"),
 #            height=6,width=8)
 #     
@@ -4711,7 +4711,7 @@ head(paramsAll)
 #       theme_bw()
 #     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
 #     data
-#     ggsave(plot=p,path=paste0(dir9B,"/figs100/"),
+#     ggsave(plot=p,path=paste0(dir10A,"/figs100/"),
 #            filename=paste0(fName,".png"),
 #            height=6,width=8)
 #   }
@@ -4719,9 +4719,9 @@ head(paramsAll)
 
 #Analyze in a new way - conver this into a 'table'
 ID<-0
-for (i in summaryFiles9B){
+for (i in summaryFiles10A){
   ID<-ID+1
-  dataAllReps <- read.csv(paste0(dir9B,"/",i))
+  dataAllReps <- read.csv(paste0(dir10A,"/",i))
   for (r in unique(dataAllReps$rep)){
     data <- subset(dataAllReps,rep==r)
     N<-data[1,]$N
@@ -4761,9 +4761,9 @@ for (i in summaryFiles9B){
     initA<-data[1,]$meanAlphaBeta
     initB<-data[4,]$meanAlphaBeta
     
-    paramsAll$G
+    paramsAll$G-1
     
-    for (size in c(10000,5000,1000,500,100)){
+    for (size in c(9999,5000,1000,500,100)){
       avgAlpha<- mean(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Sender")$meanAlphaBeta)
       avgBeta<- mean(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Receiver")$meanAlphaBeta)
       avgComSend <- mean(as.numeric(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Sender")$combined))
@@ -4776,17 +4776,179 @@ for (i in summaryFiles9B){
         geom_hline(aes(yintercept=ifelse(indType=="Sender",avgComSend,avgComRespond)),
                    color="black",linetype="dashed",linewidth=0.6,alpha=0.5) + 
         geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
-        geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+        #geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
         geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
         geom_path(aes(x=gen,y=as.numeric(combined)),color="orange",linetype="dashed") +
         facet_grid(indType~.) +
         labs(color="Solid Orange Line:\nAlpha or Beta\n\nDotted Line:\nCombined\n\nStrategy") +
-        labs(title=paste0("N: ",data$N, " Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender, "mu Step: ",data$mutStepAlpha)) +
+        labs(title=paste0("N: ",data$N, " Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender, " mu Step: ",data$mutStepAlpha)) +
       #  labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
         theme_bw()
       p
       fName<-paste0(ID,"_",unique(paste0(data$N,"_",data$mutRateAlpha,"_",data$mutRateStrategySender,"_",round(data$initA,3),"_",round(data$initB,3),data$mutStepAlpha)))
-      ggsave(plot=p,path=paste0(dir9B,"/figsComb",size,"/"),
+      ggsave(plot=p,path=paste0(dir10A,"/figsComb",size,"/"),
+             filename=paste0(fName,".png"),
+             height=6,width=8)
+    }
+    
+  }
+}
+
+#Exper 10A - Trajectories, hybrid start ####
+dir10A <- "D:/StAndrews/SignallingDiscrete/Exper10A"
+summaryFiles10A <- list.files(dir10A,"*summaryStats*")
+#First - create endData stats from summaryStats files produced by cpp
+cutoff <- 0.25   #Look at last this % of generations
+iterator <- 1
+endDataAll10A<-data.frame()
+
+#Extract params
+ID<-0
+paramsAll<-data.frame()
+for (i in summaryFiles10A){
+  ID<-ID+1
+  dataAllReps <- read.csv(paste0(dir10A,"/",i))
+  paramsAll<-rbind(paramsAll,dataAllReps[1,])
+}
+
+for (i in 1:ncol(paramsAll)){
+  if (length(unique(paramsAll[,i])) > 1){
+    print(colnames(paramsAll)[i])
+    print(unique(paramsAll[,i]))
+  }
+}
+head(paramsAll)
+#Params: N, mutRateAlphaBeta, mutRateStrategy
+
+#ID<-0
+# for (i in summaryFiles10A){
+#   ID<-ID+1
+#   dataAllReps <- read.csv(paste0(dir10A,"/",i))
+#   for (r in unique(dataAllReps$rep)){
+#     data <- subset(dataAllReps,rep==r)
+#     
+#     initA<-data[1,]$meanAlphaBeta
+#     initB<-data[4,]$meanAlphaBeta
+#     
+#     p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-1000))) +
+#       geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+#       geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+#       geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+#       facet_grid(indType~.) +
+#       geom_hline(aes(yintercept=expAlphaBeta)) +
+#       labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+#       labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender, " mu Step: ",data$mutStepAlpha)) +
+#       labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+#       theme_bw()
+#     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+#     p
+#     ggsave(plot=p,path=paste0(dir10A,"/figs1000/"),
+#            filename=paste0(fName,".png"),
+#            height=6,width=8)
+#     
+#     p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-500))) +
+#       geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+#       geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+#       geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+#       facet_grid(indType~.) +
+#       geom_hline(aes(yintercept=expAlphaBeta)) +
+#       labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+#       labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender)) +
+#       labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+#       theme_bw()
+#     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+#     ggsave(plot=p,path=paste0(dir10A,"/figs500/"),
+#            filename=paste0(fName,".png"),
+#            height=6,width=8)
+#     
+#     p<-ggplot(subset(data, gen <= 5000 & gen >= (5000-100))) +
+#       geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+#       geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+#       geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+#       facet_grid(indType~.) +
+#       geom_hline(aes(yintercept=expAlphaBeta)) +
+#       labs(color="Orange Line:\nAlpha or Beta\n\nStrategy") +
+#       labs(title=paste0("Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender)) +
+#       labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+#       theme_bw()
+#     fName<-paste0(ID,"_",unique(paste0(data$mutRateAlpha,"_",round(data$initA,3),"_",round(data$initB,3))))
+#     data
+#     ggsave(plot=p,path=paste0(dir10A,"/figs100/"),
+#            filename=paste0(fName,".png"),
+#            height=6,width=8)
+#   }
+# }
+
+#Analyze in a new way - conver this into a 'table'
+ID<-0
+for (i in summaryFiles10A){
+  ID<-ID+1
+  dataAllReps <- read.csv(paste0(dir10A,"/",i))
+  for (r in unique(dataAllReps$rep)){
+    data <- subset(dataAllReps,rep==r)
+    N<-data[1,]$N
+    m<-data[1,]$m
+    
+    combinedSendRespond<-data.frame()
+    
+    row<-1
+    while (row < nrow(data)){
+      S<-data[row:(row+2),]
+      R<-data[(row+3):(row+5),]
+      
+      #Chance of sending if T2
+      send<-0
+      #Strat 1, T2, send (alpha)
+      send<-send+S[1,]$stratNum/N*S[1,]$meanAlphaBeta
+      #Strat 2 = never send
+      #Strat 3 (send if T2), T2
+      send<-send+S[3,]$stratNum/N
+      
+      #Chance of responding to signal
+      #Strat 1, respond (beta)
+      respond<-R[1,]$stratNum/N*R[1,]$meanAlphaBeta
+      
+      #strat 2 = never respond
+      #strat 3 = respond if no signal.
+      
+      combinedSendRespond<-rbind(combinedSendRespond,c(S[1,]$gen,"Sender",send))
+      combinedSendRespond<-rbind(combinedSendRespond,c(S[1,]$gen,"Receiver",respond))
+      
+      row<-row+6
+    }
+    colnames(combinedSendRespond) <- c("gen","indType","combined")
+    
+    dataCom<-merge(data,combinedSendRespond)
+    
+    initA<-data[1,]$meanAlphaBeta
+    initB<-data[4,]$meanAlphaBeta
+    
+    paramsAll$G-1
+    
+    for (size in c(9999,5000,1000,500,100)){
+      avgAlpha<- mean(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Sender")$meanAlphaBeta)
+      avgBeta<- mean(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Receiver")$meanAlphaBeta)
+      avgComSend <- mean(as.numeric(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Sender")$combined))
+      avgComRespond <- mean(as.numeric(subset(dataCom, gen <= 10000 & gen >= (10000-size) & indType == "Receiver")$combined))
+      dataCom
+      p<-ggplot(subset(dataCom, gen <= 10000 & gen >= (10000-size))) +
+        geom_hline(aes(yintercept=expAlphaBeta)) +
+        geom_hline(aes(yintercept=ifelse(indType=="Sender",avgAlpha,avgBeta)),
+                   color="black",linetype="dotted",linewidth=0.7,alpha=0.5) + 
+        geom_hline(aes(yintercept=ifelse(indType=="Sender",avgComSend,avgComRespond)),
+                   color="black",linetype="dashed",linewidth=0.6,alpha=0.5) + 
+        geom_path(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.9) +
+        #geom_point(aes(x=gen,y=stratNum/N,color=as.factor(stratType)),alpha=0.7) +
+        geom_path(aes(x=gen,y=meanAlphaBeta),color="orange") +
+        geom_path(aes(x=gen,y=as.numeric(combined)),color="orange",linetype="dashed") +
+        facet_grid(indType~.) +
+        labs(color="Solid Orange Line:\nAlpha or Beta\n\nDotted Line:\nCombined\n\nStrategy") +
+        labs(title=paste0("N: ",data$N, " Alpha, Beta mu: ",data$mutRateAlpha," Strategy mu: ",data$mutRateStrategySender, " mu Step: ",data$mutStepAlpha)) +
+        #  labs(subtitle=paste0("Init Alpha: ",initA," Init Beta: ",initB)) +
+        theme_bw()
+      p
+      fName<-paste0(ID,"_",unique(paste0(data$N,"_",data$mutRateAlpha,"_",data$mutRateStrategySender,"_",round(data$initA,3),"_",round(data$initB,3),data$mutStepAlpha)))
+      ggsave(plot=p,path=paste0(dir10A,"/figsComb",size,"/"),
              filename=paste0(fName,".png"),
              height=6,width=8)
     }
